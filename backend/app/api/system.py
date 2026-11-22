@@ -8,16 +8,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import current_user, get_container, get_db
+from app.db.models import User
 from app.errors import NotFoundError
-from app.schemas import HealthOut, MetricsOut
+from app.schemas import HealthOut, MetricsOut, TraceOut
 from app.services import metrics_service
 from app.services.container import Container
 
-router = APIRouter(tags=["system"])
+router = APIRouter()
 EVAL_RESULTS_DIR = Path(__file__).resolve().parents[2] / "evals" / "results"
 
 
-@router.get("/health", response_model=HealthOut)
+@router.get("/health", response_model=HealthOut, tags=["system"])
 async def health(
     request: Request, db: AsyncSession = Depends(get_db), c: Container = Depends(get_container)
 ) -> HealthOut:
@@ -39,10 +40,18 @@ async def health(
     return HealthOut(status="ok" if healthy else "degraded", mode=c.mode, checks=checks)
 
 
-@router.get("/metrics", response_model=MetricsOut, dependencies=[Depends(current_user)])
+@router.get("/metrics", response_model=MetricsOut, dependencies=[Depends(current_user)], tags=["monitoring"])
 async def metrics(hours: int = Query(24, ge=1, le=24 * 30), db: AsyncSession = Depends(get_db)) -> dict:
     """Latency percentiles, tokens, cost, error and refusal rates for the dashboard."""
     return await metrics_service.summary(db, hours)
+
+
+@router.get("/metrics/traces", response_model=list[TraceOut], tags=["monitoring"])
+async def traces(
+    limit: int = Query(30, ge=1, le=200), user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
+) -> list[dict]:
+    """Your latest requests, each with its request id and per-step timings (request tracing)."""
+    return await metrics_service.recent_traces(db, user.id, limit)
 
 
 @router.get("/evals", dependencies=[Depends(current_user)], tags=["evaluation"])

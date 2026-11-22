@@ -5,7 +5,7 @@ How the system is evaluated, and where the results go.
 > **Status: real results are pending.** The build environment had no Cohere, Anthropic or
 > OpenAI API keys, so no live run has been made and **no quality numbers are reported here**.
 > Run `make eval` with keys (about 5 minutes and well under USD 1 for configs A and B) and
-> paste the printed table into section 5. The only run made so far used offline fake
+> paste the printed table into section 6. The only run made so far used offline fake
 > providers to prove the harness works; those numbers are deliberately not reported.
 
 ## 1. Golden set
@@ -57,7 +57,17 @@ context precision, each 1–5 normalised to 0–1. Without `OPENAI_API_KEY` thes
 `evals/human_labels.csv`) and run `python -m evals.agreement evals/results/<run>.json` to get
 Cohen's kappa between you and the judge. Above ~0.6 means the judge can be trusted on this set.
 
-## 4. How to run
+## 4. Why these evaluation tools
+
+| Need | Tool used | Why | Rejected / trade-off |
+| --- | --- | --- | --- |
+| Retrieval metrics (hit@k, recall@k, MRR) | Our own code (`evals/metrics.py`) | Deterministic, free, no LLM involved; relevance = "chunk contains the gold quote", which anyone can check by hand | — |
+| Answer quality (faithfulness, relevancy, correctness, context precision) | **LLM-as-a-judge** (`evals/judge.py`) with a visible 1–5 rubric | Same concepts RAGAS measures, but the prompt and model are pinned and readable in the repo, and it reuses the API's exact retrieval and generation code. Judge (OpenAI) ≠ generator (Anthropic) to avoid self-preference. | **RAGAS**: also judges with an LLM, adds a large dependency tree and changes metric prompts between versions; trade-off: our scores are not directly comparable with published RAGAS numbers |
+| Cheap, judge-free correctness signal | Key-fact match (`must_include`) | Catches wrong numbers without any LLM cost | Misses correct paraphrases (e.g. "two weeks" vs "14 days"), so it is read together with the judge |
+| Judge reliability | Human labels + **Cohen's kappa** (`evals/agreement.py`) | Measures agreement beyond chance; kappa ≥ 0.6 = judge trusted on this set | — |
+| Storing and viewing results | JSON in `evals/results/` + Evaluation page in the app | Versioned in Git, reproducible offline, no extra service | **Langfuse** datasets: nice UI, but another hosted service and key for the same table |
+
+## 5. How to run
 
 ```bash
 cp .env.example .env            # add COHERE_API_KEY, ANTHROPIC_API_KEY (and OPENAI_API_KEY for judge metrics)
@@ -71,7 +81,7 @@ breakdown and every question's answer, citations and retrieved chunks) and print
 table. The **Evaluation** page in the app lists the runs. Offline runs are labelled and
 git-ignored.
 
-## 5. Results
+## 6. Results
 
 _Not yet run with real providers._ After `make eval`, paste the printed table here and fill in:
 
@@ -86,7 +96,15 @@ _Not yet run with real providers._ After `make eval`, paste the printed table he
 | latency p50 / p95 (ms) | | | |
 | avg cost per question (USD) | | | |
 
-## 6. Analysis (to write after the run)
+Multilingual questions (Bonus B), reported separately from `summary.<config>.by_category.multilingual`:
+
+| metric | A | B | C |
+| --- | --- | --- | --- |
+| hit@5 (multilingual) | | | |
+| key-fact correctness (multilingual) | | | |
+| answered in the question's language (check by hand, 5 questions) | | | |
+
+## 7. Failure analysis (to write after the run)
 
 Answer these with the numbers above:
 

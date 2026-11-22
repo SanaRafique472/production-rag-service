@@ -10,7 +10,7 @@ from app.api.deps import current_user, get_container, get_db, rate_limit
 from app.auth.security import create_access_token, hash_password, verify_password
 from app.db.models import User
 from app.errors import AuthenticationError, EmailTakenError
-from app.schemas import ErrorResponse, SignupRequest, TokenOut, UserOut
+from app.schemas import SignupRequest, TokenOut, UserOut, error_responses
 from app.services.container import Container
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     response_model=UserOut,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(rate_limit("auth"))],
-    responses={409: {"model": ErrorResponse}, 429: {"model": ErrorResponse}},
+    responses=error_responses("EMAIL_ALREADY_REGISTERED", "VALIDATION_ERROR", "RATE_LIMITED"),
 )
 async def signup(body: SignupRequest, db: AsyncSession = Depends(get_db)) -> User:
     """Create an account (password stored as an Argon2 hash)."""
@@ -41,7 +41,7 @@ async def signup(body: SignupRequest, db: AsyncSession = Depends(get_db)) -> Use
     "/login",
     response_model=TokenOut,
     dependencies=[Depends(rate_limit("auth"))],
-    responses={401: {"model": ErrorResponse}, 429: {"model": ErrorResponse}},
+    responses=error_responses("NOT_AUTHENTICATED", "RATE_LIMITED"),
 )
 async def login(
     form: OAuth2PasswordRequestForm = Depends(),
@@ -56,7 +56,7 @@ async def login(
     return TokenOut(access_token=token, expires_in=seconds)
 
 
-@router.get("/me", response_model=UserOut, responses={401: {"model": ErrorResponse}})
+@router.get("/me", response_model=UserOut, responses=error_responses("NOT_AUTHENTICATED"))
 async def me(user: User = Depends(current_user)) -> User:
     """The logged-in user."""
     return user

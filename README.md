@@ -54,7 +54,7 @@ in-process Qdrant (data in Qdrant is lost on restart in that mode).
 
 | Command | What it does |
 | --- | --- |
-| `make test` | 126 pytest tests (unit, provider contracts, API) — no keys needed |
+| `make test` | 128 pytest tests (unit, provider contracts, API) — no keys needed |
 | `make lint` | ruff |
 | `make eval` | golden-set evaluation of configs A, B, C (needs keys) — see `EVAL.md` |
 | `make notebooks` | re-execute the five pipeline notebooks |
@@ -75,10 +75,21 @@ Interactive docs at `/docs`. Main endpoints:
 | POST | `/chat/ask` | answer with citations and retrieval evidence, or a refusal |
 | GET | `/chat/history` | your chat sessions |
 | GET | `/metrics` | monitoring aggregates |
+| GET | `/metrics/traces` | your latest requests with per-step timings |
 | GET | `/evals`, `/evals/{run_id}` | stored evaluation runs |
 | GET | `/health` | database, vector store and key status |
 
 Errors always look like `{"error": {"code", "message", "request_id", "details"}}`.
+
+## Swagger UI screenshots
+
+Successful and failing API calls through Swagger UI (`/docs`) are in
+[`docs/screenshots/swagger/`](docs/screenshots/swagger/): signup 201, authorize, PDF and DOCX
+upload 201, duplicate 409, unsupported type 415, scanned PDF 400, list 200, cited answer 200,
+refusal 200, prompt injection 400, jailbreak 400, empty question 422, unknown document 404,
+metrics 200, and the documented error examples per status code. They were taken in test mode
+(fake providers), so answer text is not real model output; retake them with live keys for the
+final submission if possible.
 
 ## Repository layout
 
@@ -106,4 +117,4 @@ placeholder JWT secret. gitleaks runs as a pre-commit hook and in CI.
 All tests pass with fake providers. The live path (PostgreSQL, Qdrant server, Cohere, Claude) is
 covered by contract tests but was **not run end-to-end** in the build environment because no
 API keys or Docker daemon were available; evaluation numbers are therefore pending (see
-`EVAL.md`). Other limitations are listed in `DESIGN.md` §10.
+`EVAL.md`). Other limitations are listed in `DESIGN.md` §11.

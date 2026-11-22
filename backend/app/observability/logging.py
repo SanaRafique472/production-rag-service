@@ -13,7 +13,7 @@ from contextvars import ContextVar
 from app.guardrails import redact_secrets
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
-_EXTRA_KEYS = ("method", "path", "status", "latency_ms", "provider", "error_type", "user_id", "document_id")
+_EXTRA_KEYS = ("method", "path", "status", "latency_ms", "provider", "error_type", "user_id", "document_id", "trace")
 
 
 class JsonFormatter(logging.Formatter):

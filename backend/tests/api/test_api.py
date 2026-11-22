@@ -298,3 +298,33 @@ async def test_metrics_endpoint(client, user, samples):
     assert m["questions"] == 3 and m["latency_p50_ms"] is not None and m["latency_p95_ms"] >= m["latency_p50_ms"]
     assert m["avg_tokens_in"] > 0 and m["error_rate"] == 0.0
     assert "POST /chat/ask" in m["by_route"] and m["timeline"]
+
+
+async def test_request_traces_are_per_user(client, user, samples):
+    await upload(client, user, samples["policy_pdf"])
+    r = await client.post("/chat/ask", headers=user, json={"question": SICK_Q})
+    traces = (await client.get("/metrics/traces", headers=user)).json()
+    ask = next(t for t in traces if t["route"] == "/chat/ask")
+    assert ask["request_id"] == r.headers["X-Request-ID"] and {"embed_ms", "search_ms", "llm_ms"} <= set(
+        ask["steps_ms"]
+    )
+    other = await auth_headers(client, "other@example.com")
+    assert all(t["route"] != "/chat/ask" for t in (await client.get("/metrics/traces", headers=other)).json())
+
+
+async def test_openapi_documents_each_error_code(client):
+    spec = (await client.get("/openapi.json")).json()
+    upload = spec["paths"]["/documents"]["post"]["responses"]
+    assert set(upload["400"]["content"]["application/json"]["examples"]) == {
+        "EMPTY_FILE",
+        "NO_EXTRACTABLE_TEXT",
+        "CORRUPT_FILE",
+    }
+    assert "DUPLICATE_DOCUMENT" in upload["409"]["content"]["application/json"]["examples"]
+    ask = spec["paths"]["/chat/ask"]["post"]["responses"]
+    assert {"PROMPT_INJECTION_DETECTED", "JAILBREAK_DETECTED"} <= set(
+        ask["400"]["content"]["application/json"]["examples"]
+    )
+    assert ask["422"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "ErrorResponse"
+    )  # our envelope, not FastAPI's default

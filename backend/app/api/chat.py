@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import current_user, get_container, get_db, rate_limit
 from app.db.models import User
 from app.observability.logging import request_id_var
-from app.schemas import AskRequest, AskResponse, ErrorResponse, HistoryOut, SessionOut
+from app.schemas import AskRequest, AskResponse, HistoryOut, SessionOut, error_responses
 from app.services import chat_service
 from app.services.container import Container
 
@@ -17,7 +17,17 @@ router = APIRouter(prefix="/chat", tags=["chat"])
     "/ask",
     response_model=AskResponse,
     dependencies=[Depends(rate_limit("ask"))],
-    responses={code: {"model": ErrorResponse} for code in (400, 401, 404, 422, 429, 503)},
+    responses=error_responses(
+        "PROMPT_INJECTION_DETECTED",
+        "JAILBREAK_DETECTED",
+        "NOT_AUTHENTICATED",
+        "NOT_FOUND",
+        "VALIDATION_ERROR",
+        "INVALID_QUESTION",
+        "RATE_LIMITED",
+        "UPSTREAM_RATE_LIMITED",
+        "UPSTREAM_UNAVAILABLE",
+    ),
 )
 async def ask(
     body: AskRequest,
@@ -32,9 +42,7 @@ async def ask(
     return response
 
 
-@router.get(
-    "/history", response_model=HistoryOut, responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}}
-)
+@router.get("/history", response_model=HistoryOut, responses=error_responses("NOT_AUTHENTICATED", "NOT_FOUND"))
 async def history(
     session_id: str | None = None,
     limit: int = Query(20, ge=1, le=100),
