@@ -1,0 +1,9 @@
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+tests
+*.sqlite3
+.env
+evals/results/*offline*.json
