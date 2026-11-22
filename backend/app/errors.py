@@ -77,3 +77,33 @@ class UpstreamRateLimitedError(AppError):
     """An external provider kept rate-limiting us after retries."""
 
     status_code, code = 429, "UPSTREAM_RATE_LIMITED"
+
+
+class InvalidQuestionError(AppError):
+    """Question is empty after trimming or otherwise invalid."""
+
+    status_code, code = 422, "INVALID_QUESTION"
+
+
+class PromptInjectionError(AppError):
+    """The question tries to override or reveal the system instructions."""
+
+    status_code, code = 400, "PROMPT_INJECTION_DETECTED"
+
+
+class JailbreakError(AppError):
+    """The question tries to remove the assistant's rules (role-play, 'DAN', ...)."""
+
+    status_code, code = 400, "JAILBREAK_DETECTED"
+
+
+class AuthenticationError(AppError):
+    """Missing, invalid or expired credentials."""
+
+    status_code, code = 401, "NOT_AUTHENTICATED"
+
+
+class EmailTakenError(AppError):
+    """Signup with an email that already has an account."""
+
+    status_code, code = 409, "EMAIL_ALREADY_REGISTERED"

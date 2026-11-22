@@ -52,6 +52,47 @@ class Settings(BaseSettings):
     # --- Questions ---
     max_question_chars: int = 1000
 
+    # --- Providers / models ---
+    use_fake_providers: bool = Field(
+        False, description="Offline deterministic fakes for tests. Never use for real answers."
+    )
+    embed_model_index: str = "embed-v5.0-pro"
+    embed_model_query: str = "embed-v5.0-fast"
+    embed_dim: int = 1024
+    embed_batch_size: int = 96
+    embed_concurrency: int = 4
+    rerank_model: str = "rerank-v5.0-fast"
+    llm_model: str = "claude-haiku-5-5"
+    llm_max_tokens: int = 600
+    judge_model: str = "gpt-6-luna"  # evaluation judge (different provider); verify id
+    use_llm_classifier: bool = True  # extra guardrail call, run in parallel with retrieval
+
+    # --- Retrieval (configuration B defaults; evals override per config) ---
+    retrieval_hybrid: bool = True
+    retrieval_dense_k: int = 40
+    retrieval_sparse_k: int = 40
+    retrieval_fused_k: int = 30
+    retrieval_rerank: bool = True
+    retrieval_top_n: int = 6
+    rerank_threshold: float = 0.35  # calibrated 0-1 score; tuned on the golden set
+    dense_threshold: float = 0.30  # cosine floor when reranking is off; tuned on the golden set
+
+    # --- Timeouts / retries (every external call) ---
+    http_timeout_s: float = 30.0
+    max_retries: int = 3
+    ingestion_timeout_s: float = 120.0
+
+    # --- Rate limits (per user or IP) ---
+    rate_limit_ask: str = "20/minute"
+    rate_limit_upload: str = "10/minute"
+    rate_limit_auth: str = "10/minute"
+
+    # --- Cost table, USD per million tokens (checked Nov 2026; update if prices change) ---
+    price_llm_in: float = 0.10
+    price_llm_out: float = 0.50
+    price_embed_query: float = 0.08
+    price_rerank: float = 0.02
+
     @property
     def max_upload_bytes(self) -> int:
         """Upload size limit in bytes."""

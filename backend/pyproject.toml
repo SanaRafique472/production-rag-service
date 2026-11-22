@@ -11,12 +11,16 @@ asyncio_default_fixture_loop_scope = "function"
 markers = ["live: calls real external APIs (needs keys, run manually)"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "D"]
-ignore = ["D100", "D104", "D203", "D213"]
+ignore = ["D100", "D104", "D105", "D107", "D203", "D401", "D213", "B008"]  # B008: FastAPI Depends() in defaults is idiomatic
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D"]
+"tests/**" = ["D", "E501"]
+"app/generation.py" = ["E501"]  # prompt text and translations
+"app/guardrails.py" = ["E501"]  # long regex patterns
+"evals/**" = ["D"]
+"scripts/**" = ["D"]
