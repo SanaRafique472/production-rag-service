@@ -94,3 +94,8 @@ export interface EvalRunSummary {
   summary: Record<string, Record<string, unknown>>;
 }
 export interface Health { status: string; mode: string; checks: Record<string, string> }
+export interface Trace {
+  request_id: string; created_at: string; method: string; route: string; status_code: number; latency_ms: number;
+  steps_ms: Record<string, number>; tokens_in: number; tokens_out: number; cost_usd: number;
+  refused: boolean | null; error_type: string | null;
+}

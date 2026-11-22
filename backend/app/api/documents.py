@@ -6,12 +6,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import current_user, get_container, get_db, rate_limit
 from app.db.models import Document, User
 from app.errors import FileTooLargeError
-from app.schemas import DocumentList, DocumentOut, ErrorResponse
+from app.schemas import DocumentList, DocumentOut, error_responses
 from app.services import documents_service as svc
 from app.services.container import Container
 
 router = APIRouter(prefix="/documents", tags=["documents"])
-_ERRORS = {code: {"model": ErrorResponse} for code in (400, 401, 409, 413, 415, 429, 503)}
+_ERRORS = error_responses(
+    "EMPTY_FILE",
+    "NO_EXTRACTABLE_TEXT",
+    "CORRUPT_FILE",
+    "NOT_AUTHENTICATED",
+    "DUPLICATE_DOCUMENT",
+    "FILE_TOO_LARGE",
+    "UNSUPPORTED_FILE_TYPE",
+    "VALIDATION_ERROR",
+    "RATE_LIMITED",
+    "UPSTREAM_UNAVAILABLE",
+)
 
 
 @router.post(
@@ -37,7 +48,7 @@ async def upload(
     return await svc.upload_document(db, c, user.id, file.filename or "upload", data)
 
 
-@router.get("", response_model=DocumentList, responses={401: {"model": ErrorResponse}})
+@router.get("", response_model=DocumentList, responses=error_responses("NOT_AUTHENTICATED"))
 async def list_documents(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -52,7 +63,7 @@ async def list_documents(
 @router.get(
     "/{document_id}",
     response_model=DocumentOut,
-    responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    responses=error_responses("NOT_AUTHENTICATED", "NOT_FOUND"),
 )
 async def get_document(
     document_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
@@ -64,7 +75,7 @@ async def get_document(
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+    responses=error_responses("NOT_AUTHENTICATED", "NOT_FOUND", "UPSTREAM_UNAVAILABLE"),
 )
 async def delete_document(
     document_id: str,

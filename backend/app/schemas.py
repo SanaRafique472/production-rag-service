@@ -8,8 +8,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 class ErrorBody(BaseModel):
     """Body of every error response."""
 
-    code: str = Field(examples=["DUPLICATE_DOCUMENT"])
-    message: str = Field(examples=["This file was already uploaded as leave_policy.pdf."])
+    code: str = Field(description="Stable machine-readable error code")
+    message: str = Field(description="Human-readable explanation")
     request_id: str | None = Field(None, examples=["req_3f9a1c2b7d4e"])
     details: dict = Field(default_factory=dict)
 
@@ -18,6 +18,43 @@ class ErrorResponse(BaseModel):
     """Envelope used for all 4xx/5xx responses."""
 
     error: ErrorBody
+
+
+# Every error code the API can return: (HTTP status, example message).
+ERROR_CATALOG: dict[str, tuple[int, str]] = {
+    "EMPTY_FILE": (400, "The uploaded file is empty."),
+    "NO_EXTRACTABLE_TEXT": (400, "No extractable text found. The file may be scanned images or empty."),
+    "CORRUPT_FILE": (400, "The file is damaged or password-protected and cannot be read."),
+    "PROMPT_INJECTION_DETECTED": (
+        400,
+        "This request tries to change or reveal the assistant's instructions and was blocked.",
+    ),
+    "JAILBREAK_DETECTED": (400, "This request tries to bypass the assistant's rules and was blocked."),
+    "NOT_AUTHENTICATED": (401, "Missing bearer token. Log in at /auth/login."),
+    "NOT_FOUND": (404, "Document not found."),
+    "DUPLICATE_DOCUMENT": (409, "This file was already uploaded as leave_policy.pdf."),
+    "EMAIL_ALREADY_REGISTERED": (409, "An account with this email already exists."),
+    "FILE_TOO_LARGE": (413, "File is larger than 20 MB."),
+    "UNSUPPORTED_FILE_TYPE": (415, "Unsupported file type '.exe'."),
+    "VALIDATION_ERROR": (422, "The request is invalid."),
+    "INVALID_QUESTION": (422, "The question is empty."),
+    "RATE_LIMITED": (429, "Rate limit exceeded (20/minute). Try again in 12 s."),
+    "UPSTREAM_RATE_LIMITED": (429, "Cohere embeddings is rate-limiting requests. Try again shortly."),
+    "UPSTREAM_UNAVAILABLE": (503, "Claude is not available right now. Try again shortly."),
+}
+
+
+def error_responses(*codes: str) -> dict:
+    """OpenAPI ``responses`` with one realistic example per error code, grouped by HTTP status."""
+    out: dict[int, dict] = {}
+    for code in codes:
+        status, message = ERROR_CATALOG[code]
+        entry = out.setdefault(status, {"model": ErrorResponse, "content": {"application/json": {"examples": {}}}})
+        entry["content"]["application/json"]["examples"][code] = {
+            "summary": code,
+            "value": {"error": {"code": code, "message": message, "request_id": "req_3f9a1c2b7d4e", "details": {}}},
+        }
+    return out
 
 
 # ---------- auth ----------
@@ -201,3 +238,20 @@ class MetricsOut(BaseModel):
     total_cost_usd: float
     by_route: dict[str, dict[str, float]]
     timeline: list[dict]
+
+
+class TraceOut(BaseModel):
+    """One request with its step timings (embed, search, rerank, LLM)."""
+
+    request_id: str = Field(examples=["req_3f9a1c2b7d4e"])
+    created_at: datetime
+    method: str
+    route: str
+    status_code: int
+    latency_ms: int
+    steps_ms: dict[str, int] = Field(examples=[{"embed_ms": 120, "search_ms": 35, "rerank_ms": 180, "llm_ms": 900}])
+    tokens_in: int
+    tokens_out: int
+    cost_usd: float
+    refused: bool | None
+    error_type: str | None

@@ -82,3 +82,32 @@ async def summary(db: AsyncSession, hours: int) -> dict:
         "by_route": by_route,
         "timeline": timeline,
     }
+
+
+async def recent_traces(db: AsyncSession, user_id: str, limit: int) -> list[dict]:
+    """The user's latest requests with their step timings (a simple request trace view)."""
+    rows = await db.scalars(
+        select(RequestMetric)
+        .where(RequestMetric.user_id == user_id)
+        .order_by(RequestMetric.created_at.desc())
+        .limit(limit)
+    )
+    return [
+        {
+            "request_id": r.request_id,
+            "created_at": r.created_at,
+            "method": r.method,
+            "route": r.route,
+            "status_code": r.status_code,
+            "latency_ms": r.latency_ms,
+            "steps_ms": {
+                k: getattr(r, k) for k in ("embed_ms", "search_ms", "rerank_ms", "llm_ms") if getattr(r, k) is not None
+            },
+            "tokens_in": r.tokens_in,
+            "tokens_out": r.tokens_out,
+            "cost_usd": round(r.cost_usd, 6),
+            "refused": r.refused,
+            "error_type": r.error_type,
+        }
+        for r in rows
+    ]

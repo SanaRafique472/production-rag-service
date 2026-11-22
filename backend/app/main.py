@@ -84,9 +84,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             latency = int((time.perf_counter() - start) * 1000)
             route = request.scope.get("route")
             path = getattr(route, "path", request.url.path)
-            log.info("request", extra={"method": request.method, "path": path, "status": status, "latency_ms": latency})
+            m = getattr(request.state, "metric", {}) or {}  # per-step trace set by /chat/ask
+            trace = {k: v for k, v in m.items() if k.endswith("_ms") and v is not None} or None
+            log.info(
+                "request",
+                extra={"method": request.method, "path": path, "status": status, "latency_ms": latency, "trace": trace},
+            )
             if request.method != "OPTIONS" and hasattr(request.app.state, "sessionmaker"):
-                m = getattr(request.state, "metric", {}) or {}
                 try:
                     async with request.app.state.sessionmaker() as db:
                         db.add(

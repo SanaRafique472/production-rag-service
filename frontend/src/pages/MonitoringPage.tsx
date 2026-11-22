@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Metrics } from "../api";
+import { api, type Metrics, type Trace } from "../api";
 
 const ms = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${Math.round(v)} ms`);
 const pct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
@@ -36,13 +36,50 @@ function LatencyChart({ data }: { data: Metrics["timeline"] }) {
   );
 }
 
+const STEP_COLORS: Record<string, string> = { embed_ms: "bg-sky-500", search_ms: "bg-brand-600", rerank_ms: "bg-violet-500", llm_ms: "bg-amber-500" };
+
+// One row per request: a small waterfall of the steps inside it (embed -> search -> rerank -> LLM).
+function TraceTable({ traces }: { traces: Trace[] }) {
+  const asks = traces.filter((t) => t.route === "/chat/ask");
+  if (asks.length === 0) return <p className="text-sm text-stone-400">Ask a question to see its trace here.</p>;
+  return (
+    <table className="w-full text-sm">
+      <thead className="text-left text-stone-500">
+        <tr>{["Request id", "Status", "Total", "Steps", "Tokens", "Cost"].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}</tr>
+      </thead>
+      <tbody>
+        {asks.map((t) => (
+          <tr key={t.request_id} className="border-t border-stone-100">
+            <td className="px-3 py-1.5 font-mono text-xs">{t.request_id}</td>
+            <td className={`px-3 py-1.5 ${t.status_code >= 400 ? "text-red-600" : "text-stone-700"}`}>{t.status_code}{t.refused ? " · refused" : ""}{t.error_type ? ` · ${t.error_type}` : ""}</td>
+            <td className="px-3 py-1.5 font-mono">{t.latency_ms} ms</td>
+            <td className="px-3 py-1.5">
+              <div className="flex h-3 w-48 overflow-hidden rounded bg-stone-100" title={Object.entries(t.steps_ms).map(([k, v]) => `${k.replace("_ms", "")}: ${v} ms`).join(" · ")}>
+                {Object.entries(t.steps_ms).map(([k, v]) => (
+                  <div key={k} className={STEP_COLORS[k] ?? "bg-stone-400"} style={{ width: `${(v / Math.max(t.latency_ms, 1)) * 100}%` }} />
+                ))}
+              </div>
+            </td>
+            <td className="px-3 py-1.5 font-mono text-xs">{t.tokens_in}/{t.tokens_out}</td>
+            <td className="px-3 py-1.5 font-mono text-xs">${t.cost_usd.toFixed(5)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export default function MonitoringPage() {
   const [hours, setHours] = useState(24);
   const [m, setM] = useState<Metrics | null>(null);
   const [error, setError] = useState("");
+  const [traces, setTraces] = useState<Trace[]>([]);
 
   useEffect(() => {
-    const load = () => api<Metrics>(`/metrics?hours=${hours}`).then(setM).catch((e) => setError(e.message));
+    const load = () => {
+      api<Metrics>(`/metrics?hours=${hours}`).then(setM).catch((e) => setError(e.message));
+      api<Trace[]>("/metrics/traces?limit=50").then(setTraces).catch(() => {});
+    };
     load();
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
@@ -103,6 +140,16 @@ export default function MonitoringPage() {
             </tbody>
           </table>
         </div>
+      </div>
+      <div className="card overflow-x-auto p-4">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-medium text-stone-800">Request traces (your latest questions)</h2>
+          <span className="text-xs text-stone-500">
+            {Object.entries(STEP_COLORS).map(([k, c]) => <span key={k} className="mr-2"><span className={`mr-1 inline-block h-2 w-2 rounded-sm ${c}`} />{k.replace("_ms", "")}</span>)}
+          </span>
+        </div>
+        <TraceTable traces={traces} />
+        <p className="mt-2 text-xs text-stone-400">Search the JSON logs for a request id to see every log line of that request.</p>
       </div>
       <p className="text-xs text-stone-500">Total estimated provider cost in window: ${m.total_cost_usd.toFixed(4)} · {m.requests} requests · refreshes every 15 s.</p>
     </div>
