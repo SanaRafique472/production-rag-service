@@ -111,7 +111,6 @@ class ClaudeLLM:
             resp = await self._client.messages.create(
                 model=self._s.llm_model,
                 max_tokens=self._s.llm_max_tokens,
-                temperature=0,
                 system=system,
                 messages=[{"role": "user", "content": content}],
             )
@@ -136,7 +135,6 @@ class ClaudeLLM:
             resp = await self._client.messages.create(
                 model=self._s.llm_model,
                 max_tokens=20,
-                temperature=0,
                 system=CLASSIFIER_PROMPT,
                 messages=[{"role": "user", "content": f"<question>{question}</question>"}],
             )

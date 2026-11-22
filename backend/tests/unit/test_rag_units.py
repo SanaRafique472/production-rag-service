@@ -157,3 +157,13 @@ def test_percentile_nearest_rank():
     values = list(range(1, 101))
     assert percentile(values, 50) == 50 and percentile(values, 95) == 95
     assert percentile([], 50) is None and percentile([7], 95) == 7
+
+
+def test_settings_empty_values_and_production_guard():
+    from app.config import Settings
+
+    s = Settings(_env_file=None, cohere_api_key="", qdrant_url=" ", database_url="")
+    assert s.cohere_api_key is None and s.qdrant_url is None and s.database_url.startswith("sqlite")
+    with pytest.raises(ValueError, match="JWT_SECRET_KEY"):
+        Settings(_env_file=None, app_env="production")
+    assert Settings(_env_file=None, app_env="production", jwt_secret_key="x" * 40).app_env == "production"

@@ -7,7 +7,7 @@ printed in logs or error messages by accident.
 
 from functools import lru_cache
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -92,6 +92,35 @@ class Settings(BaseSettings):
     price_llm_out: float = 0.50
     price_embed_query: float = 0.08
     price_rerank: float = 0.02
+
+    @field_validator(
+        "anthropic_api_key",
+        "cohere_api_key",
+        "openai_api_key",
+        "qdrant_api_key",
+        "qdrant_url",
+        "qdrant_path",
+        mode="before",
+    )
+    @classmethod
+    def _empty_is_none(cls, v):  # noqa: ANN001, ANN206
+        """Treat ``KEY=`` in .env as "not set"."""
+        return None if isinstance(v, str) and not v.strip() else v
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _default_db(cls, v):  # noqa: ANN001, ANN206
+        return "sqlite+aiosqlite:///./rag.sqlite3" if isinstance(v, str) and not v.strip() else v
+
+    @model_validator(mode="after")
+    def _safe_in_production(self) -> "Settings":
+        """Refuse to start in production with the placeholder JWT secret or fake providers."""
+        if self.app_env == "production":
+            if self.jwt_secret_key.get_secret_value() in ("", "change-me") or len(self.jwt_secret_key) < 32:
+                raise ValueError("Set JWT_SECRET_KEY to a random value of at least 32 characters in production.")
+            if self.use_fake_providers:
+                raise ValueError("USE_FAKE_PROVIDERS must be false in production.")
+        return self
 
     @property
     def max_upload_bytes(self) -> int:
