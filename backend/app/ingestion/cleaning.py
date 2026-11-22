@@ -48,11 +48,7 @@ def remove_repeated_lines(units: list[TextUnit], page_count: int | None) -> list
         if u.page is not None and len(u.text) <= 100 and u.kind == "text":
             pages_by_sig[_signature(u.text)].add(u.page)
     repeated = {sig for sig, pages in pages_by_sig.items() if len(pages) >= 0.6 * page_count}
-    return [
-        u
-        for u in units
-        if not (u.kind == "text" and len(u.text) <= 100 and _signature(u.text) in repeated)
-    ]
+    return [u for u in units if not (u.kind == "text" and len(u.text) <= 100 and _signature(u.text) in repeated)]
 
 
 def clean_units(units: list[TextUnit], page_count: int | None) -> list[TextUnit]:

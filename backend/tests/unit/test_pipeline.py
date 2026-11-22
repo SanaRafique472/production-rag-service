@@ -40,9 +40,7 @@ def test_empty_and_fake_files(samples, settings, doc_id):
     with pytest.raises(EmptyFileError):
         process_file("empty.pdf", b"", document_id=doc_id, settings=settings)
     with pytest.raises(UnsupportedFileTypeError):
-        process_file(
-            "invoice.pdf", samples["fake_pdf"].read_bytes(), document_id=doc_id, settings=settings
-        )
+        process_file("invoice.pdf", samples["fake_pdf"].read_bytes(), document_id=doc_id, settings=settings)
 
 
 def test_filename_is_sanitised(samples, settings, doc_id):

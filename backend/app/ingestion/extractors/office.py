@@ -80,20 +80,14 @@ def extract_pptx(data: bytes, max_pages: int) -> ExtractedDocument:
     empty: list[int] = []
     for number, slide in enumerate(prs.slides, start=1):
         title_shape = slide.shapes.title
-        title = (
-            title_shape.text.strip()
-            if title_shape is not None and title_shape.has_text_frame
-            else ""
-        )
+        title = title_shape.text.strip() if title_shape is not None and title_shape.has_text_frame else ""
         section = title or f"Slide {number}"
         found = False
         for shape in slide.shapes:
             if title_shape is not None and shape.shape_id == title_shape.shape_id:
                 continue
             if shape.has_text_frame and shape.text_frame.text.strip():
-                units.append(
-                    TextUnit(text=shape.text_frame.text.strip(), page=number, section=section)
-                )
+                units.append(TextUnit(text=shape.text_frame.text.strip(), page=number, section=section))
                 found = True
             elif getattr(shape, "has_table", False) and shape.has_table:
                 rows = [[c.text for c in r.cells] for r in shape.table.rows]

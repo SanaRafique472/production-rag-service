@@ -94,11 +94,7 @@ def _pieces(units: list[TextUnit], size: int, overlap: int) -> list[_Piece]:
         for sentence in _SENTENCE_END.split(unit.text):
             if not sentence.strip():
                 continue
-            parts = (
-                [sentence]
-                if count_tokens(sentence) <= size
-                else _split_long(sentence, size, overlap)
-            )
+            parts = [sentence] if count_tokens(sentence) <= size else _split_long(sentence, size, overlap)
             for part in parts:
                 out.append(_Piece(part, unit.page, first, count_tokens(part)))
                 first = False
@@ -174,10 +170,7 @@ def _section_chunks(
             if unit.kind == "table":  # text before a table is chunked first, keeping order
                 out += _text_chunks(buffer, section, cfg)
                 buffer = []
-                out += [
-                    (p, unit.page, unit.page, section, "table")
-                    for p in _split_table(unit.text, cfg.size)
-                ]
+                out += [(p, unit.page, unit.page, section, "table") for p in _split_table(unit.text, cfg.size)]
             else:
                 buffer.append(unit)
         out += _text_chunks(buffer, section, cfg)
@@ -191,9 +184,7 @@ def _text_chunks(
     out = []
     for packed in _pack(_pieces(units, cfg.size, cfg.overlap), cfg.size, cfg.overlap):
         pages = [p.page for p in packed if p.page is not None]
-        out.append(
-            (_join(packed), min(pages, default=None), max(pages, default=None), section, "text")
-        )
+        out.append((_join(packed), min(pages, default=None), max(pages, default=None), section, "text"))
     return out
 
 
@@ -240,11 +231,7 @@ def chunk_document(
     """
     if not units:
         return []
-    raw = (
-        _section_chunks(units, config)
-        if config.strategy == "section"
-        else _fixed_chunks(units, config)
-    )
+    raw = _section_chunks(units, config) if config.strategy == "section" else _fixed_chunks(units, config)
     namespace = uuid.UUID(document_id)
     chunks: list[Chunk] = []
     for position, (text, p_start, p_end, section, kind) in enumerate(raw):

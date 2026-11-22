@@ -3,10 +3,7 @@ from app.ingestion.extractors.base import TextUnit
 
 
 def test_normalise_joins_hyphenated_words_and_lines():
-    assert (
-        normalise("infor-\nmation is   here\nand there", keep_newlines=False)
-        == "information is here and there"
-    )
+    assert normalise("infor-\nmation is   here\nand there", keep_newlines=False) == "information is here and there"
 
 
 def test_normalise_keeps_table_newlines():

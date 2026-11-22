@@ -63,16 +63,11 @@ def _check_zip(data: bytes, file_type: FileType, settings: Settings) -> None:
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             names = set(zf.namelist())
             if _OFFICE_MARKERS[file_type] not in names:
-                raise UnsupportedFileTypeError(
-                    f"File content is not a valid {file_type.value.upper()} document."
-                )
+                raise UnsupportedFileTypeError(f"File content is not a valid {file_type.value.upper()} document.")
             total = 0
             for info in zf.infolist():
                 total += info.file_size
-                if (
-                    info.compress_size
-                    and info.file_size / info.compress_size > settings.max_zip_ratio
-                ):
+                if info.compress_size and info.file_size / info.compress_size > settings.max_zip_ratio:
                     raise CorruptFileError(
                         "File rejected: suspicious compression ratio (possible zip bomb).",
                         {"member": info.filename},
@@ -115,9 +110,7 @@ def detect_file_type(filename: str, data: bytes, settings: Settings) -> FileType
             raise UnsupportedFileTypeError("File content is not a valid PDF.")
     elif file_type in _OFFICE_MARKERS:
         if not data.startswith(b"PK\x03\x04"):
-            raise UnsupportedFileTypeError(
-                f"File content is not a valid {file_type.value.upper()} document."
-            )
+            raise UnsupportedFileTypeError(f"File content is not a valid {file_type.value.upper()} document.")
         _check_zip(data, file_type, settings)
     else:  # TXT / MD must really be text
         if data.startswith(_BINARY_SIGNATURES) or b"\x00" in head:

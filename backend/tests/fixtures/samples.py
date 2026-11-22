@@ -52,9 +52,7 @@ def _make_policy_pdf(path: Path) -> None:
             x0, y0, cw, rh = 72, 320, 140, 24
             for r, row in enumerate(LEAVE_TABLE):
                 for c, cell in enumerate(row):
-                    rect = pymupdf.Rect(
-                        x0 + c * cw, y0 + r * rh, x0 + (c + 1) * cw, y0 + (r + 1) * rh
-                    )
+                    rect = pymupdf.Rect(x0 + c * cw, y0 + r * rh, x0 + (c + 1) * cw, y0 + (r + 1) * rh)
                     page.draw_rect(rect, color=(0, 0, 0), width=0.8)
                     page.insert_text((rect.x0 + 4, rect.y1 - 7), cell, fontsize=10)
         page.insert_text((280, 800), f"Page {i} of {len(POLICY_PAGES)}", fontsize=8)
@@ -87,9 +85,7 @@ def _make_handbook_docx(path: Path) -> None:
     d.add_heading("Devices", level=1)
     d.add_paragraph("Company laptops must use full-disk encryption.")
     table = d.add_table(rows=3, cols=2)
-    for r, row in enumerate(
-        [["Device", "Encryption"], ["Laptop", "BitLocker"], ["Phone", "Built-in"]]
-    ):
+    for r, row in enumerate([["Device", "Encryption"], ["Laptop", "BitLocker"], ["Phone", "Built-in"]]):
         for c, val in enumerate(row):
             table.cell(r, c).text = val
     d.save(path)
