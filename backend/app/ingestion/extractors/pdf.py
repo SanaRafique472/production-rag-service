@@ -94,10 +94,7 @@ def extract_pdf(data: bytes, max_pages: int) -> ExtractedDocument:
         table_rects = [pymupdf.Rect(t.bbox) for t in tables]
         for t in tables:
             # Read each cell from its own rectangle: Table.extract() can drop word spaces.
-            rows = [
-                [page.get_text("text", clip=cell).strip() if cell else "" for cell in row.cells]
-                for row in t.rows
-            ]
+            rows = [[page.get_text("text", clip=cell).strip() if cell else "" for cell in row.cells] for row in t.rows]
             md = rows_to_markdown(rows)
             if md:
                 items.append((t.bbox[1], "table", md, 0))

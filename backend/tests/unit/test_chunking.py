@@ -4,9 +4,7 @@ from app.ingestion.extractors.base import TextUnit, rows_to_markdown
 
 def _long_units() -> list[TextUnit]:
     """About 1,500 tokens of numbered sentences over two pages and two sections."""
-    sentences = [
-        f"Rule {i} says employees must follow procedure number {i} carefully." for i in range(120)
-    ]
+    sentences = [f"Rule {i} says employees must follow procedure number {i} carefully." for i in range(120)]
     return [
         TextUnit(" ".join(sentences[:60]), page=1, section="Rules > Part A"),
         TextUnit(" ".join(sentences[60:]), page=2, section="Rules > Part B"),
@@ -29,9 +27,7 @@ def test_chunks_respect_size_limit(doc_id):
 
 def test_consecutive_chunks_overlap(doc_id):
     chunks = [
-        c
-        for c in chunk_document(_long_units(), document_id=doc_id, filename="r.pdf")
-        if c.section == "Rules > Part A"
+        c for c in chunk_document(_long_units(), document_id=doc_id, filename="r.pdf") if c.section == "Rules > Part A"
     ]
     assert len(chunks) >= 2
     last_sentence = chunks[0].text.rsplit(". ", 1)[-1]
@@ -55,9 +51,7 @@ def test_header_only_in_embed_text_for_proposed(doc_id):
 
 
 def test_large_table_split_by_rows_with_header(doc_id):
-    rows = [["Code", "Description"]] + [
-        [f"C{i}", f"Item number {i} in the catalogue"] for i in range(80)
-    ]
+    rows = [["Code", "Description"]] + [[f"C{i}", f"Item number {i} in the catalogue"] for i in range(80)]
     unit = TextUnit(rows_to_markdown(rows), page=3, section="Catalogue", kind="table")
     small = ChunkingConfig("T", "section", 120, 0, False)
     chunks = chunk_document([unit], document_id=doc_id, filename="c.pdf", config=small)
@@ -76,10 +70,7 @@ def test_ids_are_deterministic(doc_id):
 
 
 def test_baseline_tracks_page_span(doc_id):
-    paragraphs = [
-        f"Paragraph {i}. " + "Staff must keep records accurate and complete. " * 18
-        for i in range(6)
-    ]
+    paragraphs = [f"Paragraph {i}. " + "Staff must keep records accurate and complete. " * 18 for i in range(6)]
     units = [TextUnit(t, page=1 + i // 3, section="S") for i, t in enumerate(paragraphs)]
     chunks = chunk_document(units, document_id=doc_id, filename="r.pdf", config=BASELINE)
     assert chunks[0].page_start == 1

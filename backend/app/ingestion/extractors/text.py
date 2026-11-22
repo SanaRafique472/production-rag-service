@@ -22,9 +22,7 @@ def decode_text(data: bytes) -> str:
     except UnicodeDecodeError:
         best = from_bytes(data).best()
         if best is None:
-            raise UnsupportedFileTypeError(
-                "Could not detect the text encoding of this file."
-            ) from None
+            raise UnsupportedFileTypeError("Could not detect the text encoding of this file.") from None
         return str(best)
 
 
