@@ -1,0 +1,11 @@
+# Proposed: section-aware 400/60 chunks, hybrid dense + BM25 with RRF, Cohere rerank.
+name: B
+description: "Proposed - section-aware 400/60 chunks, hybrid (dense + BM25, RRF), rerank, threshold 0.35"
+chunking: proposed
+hybrid: true
+rerank: true
+dense_k: 40
+sparse_k: 40
+fused_k: 30
+top_n: 6
+rerank_threshold: 0.35

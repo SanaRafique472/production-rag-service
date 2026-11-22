@@ -37,17 +37,28 @@ def _signature(text: str) -> str:
 def remove_repeated_lines(units: list[TextUnit], page_count: int | None) -> list[TextUnit]:
     """Drop page numbers and short units repeated on at least 60% of pages.
 
-    Repetition is only judged for documents with 3+ pages; with fewer pages a
-    repeated line could just be ordinary content.
+    For 3+ pages a line counts as a header/footer when it repeats on 60% of
+    pages. Two-page documents are judged more strictly: the line must be the
+    first or last unit on both pages, and each page must have other content,
+    because a repeated line could just be ordinary text.
     """
     units = [u for u in units if not _PAGE_NUMBER.match(u.text)]
-    if not page_count or page_count < 3:
+    if not page_count or page_count < 2:
         return units
     pages_by_sig: dict[str, set[int]] = defaultdict(set)
     for u in units:
         if u.page is not None and len(u.text) <= 100 and u.kind == "text":
             pages_by_sig[_signature(u.text)].add(u.page)
-    repeated = {sig for sig, pages in pages_by_sig.items() if len(pages) >= 0.6 * page_count}
+    if page_count >= 3:
+        repeated = {sig for sig, pages in pages_by_sig.items() if len(pages) >= 0.6 * page_count}
+    else:
+        per_page: dict[int, list[TextUnit]] = defaultdict(list)
+        for u in units:
+            if u.page is not None:
+                per_page[u.page].append(u)
+        edges = [{_signature(p[0].text), _signature(p[-1].text)} if len(p) > 1 else set() for p in per_page.values()]
+        repeated = set.intersection(*edges) if len(edges) == 2 else set()
+        repeated = {sig for sig in repeated if len(pages_by_sig.get(sig, ())) == 2}
     return [u for u in units if not (u.kind == "text" and len(u.text) <= 100 and _signature(u.text) in repeated)]
 
 

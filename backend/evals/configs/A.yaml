@@ -1,0 +1,10 @@
+# Baseline: fixed 800-token chunks, dense search only, no reranking.
+name: A
+description: "Baseline - fixed 800/120 token chunks, dense-only search, cosine threshold, no rerank"
+chunking: baseline        # RecursiveCharacterTextSplitter 800/120
+hybrid: false
+rerank: false
+dense_k: 40
+fused_k: 30
+top_n: 6
+dense_threshold: 0.30
