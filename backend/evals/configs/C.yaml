@@ -1,0 +1,10 @@
+# Ablation of B without BM25: shows what keyword search adds.
+name: C
+description: "Ablation - proposed chunks, dense-only search, rerank"
+chunking: proposed
+hybrid: false
+rerank: true
+dense_k: 40
+fused_k: 30
+top_n: 6
+rerank_threshold: 0.35

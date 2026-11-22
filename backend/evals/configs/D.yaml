@@ -1,0 +1,11 @@
+# Ablation of B without the reranker: shows what reranking adds.
+name: D
+description: "Ablation - proposed chunks, hybrid search, no rerank (cosine threshold)"
+chunking: proposed
+hybrid: true
+rerank: false
+dense_k: 40
+sparse_k: 40
+fused_k: 30
+top_n: 6
+dense_threshold: 0.30

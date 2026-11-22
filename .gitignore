@@ -31,3 +31,7 @@ frontend/dist/
 .DS_Store
 .vscode/
 .idea/
+
+# evaluation runs (commit live results deliberately; offline runs are never committed)
+backend/evals/results/*offline*.json
+backend/evals/human_labels.csv
