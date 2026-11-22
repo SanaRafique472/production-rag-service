@@ -113,8 +113,9 @@ sys.path.insert(0, str(ROOT / "backend"))
 os.chdir(ROOT / "backend")
 from app.config import Settings
 from app.services.container import build_container
-LIVE = bool(os.getenv("COHERE_API_KEY") and os.getenv("ANTHROPIC_API_KEY"))
-settings = Settings(use_fake_providers=not LIVE, qdrant_url=None, qdrant_path=None)
+_env = Settings()  # reads ../.env like the app does
+LIVE = bool(_env.cohere_api_key and _env.anthropic_api_key)
+settings = Settings(use_fake_providers=not LIVE, qdrant_url=None, qdrant_path=None)  # in-process Qdrant
 c = build_container(settings)
 print("MODE:", "LIVE (Cohere + Claude)" if LIVE else "FAKE providers - shows the mechanics only, not real quality")"""
 
