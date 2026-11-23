@@ -7,3 +7,4 @@ tests
 *.sqlite3
 .env
 evals/results/*offline*.json
+qdrant_storage

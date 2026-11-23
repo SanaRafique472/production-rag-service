@@ -27,7 +27,7 @@ mechanics, not real model quality.</sub>
 
 ## Quick start
 
-Requirements: Python 3.13, Node 22, Docker (for PostgreSQL and Qdrant), and API keys for
+Requirements: Python 3.11, 3.12 or 3.13, Node 20+, Docker (optional), and API keys for
 **Cohere** and **Anthropic** (OpenAI only for evaluation judge metrics).
 
 ```bash
@@ -47,8 +47,12 @@ No keys yet? Set `USE_FAKE_PROVIDERS=true` in `.env` to click through the app wi
 providers. A banner says "test mode"; the answers are not real. Without keys and without that
 flag, upload and ask return a clear 503 telling you which key is missing.
 
-Without Docker: leave `DATABASE_URL` and `QDRANT_URL` empty to use a local SQLite file and an
-in-process Qdrant (data in Qdrant is lost on restart in that mode).
+Without Docker: in `.env` make `DATABASE_URL=` and `QDRANT_URL=` empty and keep
+`QDRANT_PATH=./qdrant_storage`. Data then goes to a local SQLite file and a `qdrant_storage`
+folder inside `backend/`, and is kept after a restart. Start the API without `--reload` in this
+mode (two processes cannot open the same Qdrant folder).
+
+**Windows step-by-step guide for beginners:** [`docs/DocAnswer_Chalane_ka_Tareeqa.docx`](docs/DocAnswer_Chalane_ka_Tareeqa.docx).
 
 ## Commands
 
