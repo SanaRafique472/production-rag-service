@@ -23,8 +23,8 @@ notebooks:          ## execute all notebooks in place (keeps outputs)
 corpus:             ## regenerate the evaluation corpus in data/corpus/
 	cd backend && ../$(PY) scripts/build_corpus.py
 
-eval:               ## one-command evaluation (needs COHERE_API_KEY + ANTHROPIC_API_KEY)
-	cd backend && ../$(PY) -m evals.run --configs A B C
+eval:               ## one-command evaluation (needs COHERE_API_KEY; paced for a free trial key)
+	cd backend && ../$(PY) -m evals.run --configs A B --trial
 
 eval-offline:       ## harness check with fake providers (NOT quality numbers)
 	cd backend && ../$(PY) -m evals.run --offline --configs A B

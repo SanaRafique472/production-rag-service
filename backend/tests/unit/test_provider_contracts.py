@@ -192,7 +192,7 @@ async def test_openai_judge_contract():
 
     import openai
 
-    judge = Judge(Settings(_env_file=None, openai_api_key=FAKE_KEY))
+    judge = Judge(Settings(_env_file=None, openai_api_key=FAKE_KEY, judge_provider="openai"))
     try:
         judge._client = openai.AsyncOpenAI(
             api_key=FAKE_KEY, http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
@@ -203,3 +203,139 @@ async def test_openai_judge_contract():
         )
     scores = await judge.grade("q", "a [1]", ["ctx"], "ref")
     assert scores["faithfulness"] == 1.0 and scores["answer_relevancy"] == 0.75 and scores["context_precision"] == 0.5
+
+
+def cohere_chat_response(text: str, citations: list[dict], thinking: str = "I checked the documents.") -> dict:
+    return {
+        "id": "chat1",
+        "finish_reason": "COMPLETE",
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "thinking", "thinking": thinking}, {"type": "text", "text": text}],
+            "citations": citations,
+        },
+        "usage": {
+            "billed_units": {"input_tokens": 30, "output_tokens": 20},
+            "tokens": {"input_tokens": 700, "output_tokens": 120},
+        },
+    }
+
+
+def cite(text: str, span: str, doc_id: str, doc_text: str) -> dict:
+    start = text.index(span)
+    return {
+        "start": start,
+        "end": start + len(span),
+        "text": span,
+        "content_index": 1,
+        "type": "TEXT_CONTENT",
+        "sources": [{"type": "document", "id": doc_id, "document": {"id": doc_id, "text": doc_text}}],
+    }
+
+
+async def test_cohere_llm_sends_documents_and_maps_citations():
+    from app.clients.llm import CohereLLM
+    from app.generation import Generator
+    from app.retrieval import RetrievedChunk
+
+    chunk_text = "Employees are entitled to 12 paid sick days per year."
+    answer = "Employees get **12 paid sick days per year** (employee_handbook_2026.pdf, p. 2)."
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json=cohere_chat_response(
+                answer,
+                [
+                    cite(answer, "12 paid sick days per year", "0", chunk_text),
+                    cite(answer, " (employee_handbook_2026.pdf, p. 2)", "0", chunk_text),
+                    cite(answer, "Employees get", "7", "not a chunk we sent"),
+                ],
+            ),
+        )
+
+    llm = CohereLLM(settings())
+    llm._client = cohere.AsyncClientV2(api_key=FAKE_KEY, httpx_client=mock(handler))
+    chunk = RetrievedChunk(
+        "c0", "d1", "employee_handbook_2026.pdf", 3, 2, 2, "Leave", chunk_text, "text", False, kept=True
+    )
+    result = await Generator(llm, "CANARY-x").generate("sick days?", [chunk], "en")
+
+    body = seen["body"]
+    assert body["model"] == "command-a-plus-05-2026" and body["documents"][0]["id"] == "0"
+    assert body["documents"][0]["data"]["text"] == chunk_text and body["messages"][0]["role"] == "system"
+    assert (
+        not result.refused and result.answer == "Employees get 12 paid sick days per year [1]."
+    )  # no ** and no file name
+    assert result.invalid_citations == 1  # the citation pointing at document 7 (never sent) is dropped
+    assert result.citations[0].chunk_id == "c0" and result.tokens_in == 700
+
+
+async def test_cohere_llm_refusal_sentinel_and_rate_limit():
+    from app.clients.llm import REFUSAL_SENTINEL, CohereLLM
+
+    llm = CohereLLM(settings())
+    llm._client = cohere.AsyncClientV2(
+        api_key=FAKE_KEY,
+        httpx_client=mock(lambda r: httpx.Response(200, json=cohere_chat_response(REFUSAL_SENTINEL, []))),
+    )
+    out = await llm.answer("s", [], "q")
+    assert out.text == REFUSAL_SENTINEL
+
+    llm._client = cohere.AsyncClientV2(
+        api_key=FAKE_KEY, httpx_client=mock(lambda r: httpx.Response(429, json={"message": "trial key rate limit"}))
+    )
+    with pytest.raises(UpstreamRateLimitedError):
+        await llm.answer("s", [], "q")
+
+
+async def test_cohere_judge_contract():
+    from evals.judge import Judge
+
+    def handler(request):
+        body = json.loads(request.content)
+        assert body["model"] == "command-a-03-2025" and body["response_format"] == {"type": "json_object"}
+        content = json.dumps(
+            {"faithfulness": 5, "answer_relevancy": 5, "correctness": 3, "context_precision": 1, "reason": "ok"}
+        )
+        return httpx.Response(
+            200,
+            json={
+                "id": "j",
+                "finish_reason": "COMPLETE",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": content}]},
+            },
+        )
+
+    judge = Judge(settings())
+    judge._client = cohere.AsyncClientV2(api_key=FAKE_KEY, httpx_client=mock(handler))
+    scores = await judge.grade("q", "a", ["ctx"], "ref")
+    assert scores["faithfulness"] == 1.0 and scores["correctness"] == 0.5 and scores["context_precision"] == 0.0
+
+
+async def test_cohere_leaked_citation_tags_and_bracket_file_names():
+    from app.clients.llm import CohereLLM, SearchItem
+
+    items = [SearchItem("u0", "office_notice_urdu.docx", "کراچی دفتر کے نئے اوقات کار صبح 9 بجے سے شام 5 بجے تک ہیں۔")]
+    llm = CohereLLM(settings())
+
+    leaked = "کراچی دفتر کے اوقات کار صبح 9 بجے سے شام 5 بجے تک ہیں۔<co: 0:[0]>"
+    llm._client = cohere.AsyncClientV2(
+        api_key=FAKE_KEY, httpx_client=mock(lambda r: httpx.Response(200, json=cohere_chat_response(leaked, [])))
+    )
+    out = await llm.answer("s", items, "q")
+    assert "<co" not in out.text and out.segments[0].citations[0].index == 0  # tag turned into a real citation
+
+    bracket = "Office hours are 9 to 5 [office_notice_urdu.docx, اوقات کار]."
+    llm._client = cohere.AsyncClientV2(
+        api_key=FAKE_KEY,
+        httpx_client=mock(
+            lambda r: httpx.Response(
+                200, json=cohere_chat_response(bracket, [cite(bracket, "9 to 5", "0", items[0].text)])
+            )
+        ),
+    )
+    out = await llm.answer("s", items, "q")
+    assert out.text == "Office hours are 9 to 5." and out.segments[0].citations[0].index == 0

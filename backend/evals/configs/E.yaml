@@ -1,0 +1,14 @@
+# Follow-up to B (not yet run): same pipeline with a lower rerank threshold.
+# In the first live run (EVAL.md section 7) all 7 unanswerable questions scored <= 0.20
+# while two answerable ones (q19, q31) were refused at 0.32 and 0.35. Validate on NEW
+# questions before adopting it - choosing it from this golden set alone would be overfitting.
+name: E
+description: "B with rerank threshold 0.28"
+chunking: proposed
+hybrid: true
+rerank: true
+dense_k: 40
+sparse_k: 40
+fused_k: 30
+top_n: 6
+rerank_threshold: 0.28

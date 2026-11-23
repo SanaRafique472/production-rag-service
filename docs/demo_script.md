@@ -2,9 +2,9 @@
 
 ## Before the demo
 
-1. `.env` has `COHERE_API_KEY`, `ANTHROPIC_API_KEY`, a real `JWT_SECRET_KEY`, `USE_FAKE_PROVIDERS=false`.
-2. `docker compose up --build` → open http://localhost:8080. `GET /health` shows all checks `ok`/`configured`.
-3. `make eval` has been run once, so the Evaluation page has a live run.
+1. `.env` has `COHERE_API_KEY`, `LLM_PROVIDER=cohere`, a real `JWT_SECRET_KEY`, `USE_FAKE_PROVIDERS=false`.
+2. Start the backend and the website locally (two terminals, see `docs/DocAnswer_Chalane_ka_Tareeqa.docx`) → open http://localhost:5173. `GET http://localhost:8000/health` shows `"mode":"live"` and `"cohere":"configured"`.
+3. The live run from `EVAL.md` is in `backend/evals/results/`, so the Evaluation page already shows it. For the video, start `make eval` (or `python -m evals.run --configs A B --trial` in `backend/`) and show it running; it takes about 30 minutes, so show the start and then the finished table.
 4. Have `data/corpus/` open in a file browser.
 
 ## 1. Accounts and isolation (1 min)
@@ -25,10 +25,13 @@
 Ask, and click the citation markers each time:
 
 1. "How many paid sick days do employees get per year?" → 12, cited to handbook p. 2.
-2. "If I'm off with the flu for three days, do I need a doctor's note?" (paraphrase).
+2. "How far ahead do business trips have to be booked?" (paraphrase of "booked at least 14 days in advance").
 3. "What is the per diem for Tier 1 cities like London?" (table).
 4. "How many days per week can employees work remotely?" → both sources, conflict stated.
-5. "ملازمین کو سال میں کتنی بیماری کی چھٹیاں ملتی ہیں؟" → answer in Urdu.
+5. "کراچی دفتر کے اوقات کار کیا ہیں؟" → answer in Urdu (9 am to 5 pm).
+6. Optional, to show a known failure from `EVAL.md` §7: "If I'm off with the flu for three days, do I
+   need a doctor's note?" is refused, because its rerank score (0.32) is just under the 0.35
+   threshold. Explain the threshold trade-off and config E.
 
 Show the evidence panel: retrieved vs. sent-to-LLM counts, cosine / BM25 rank / RRF / rerank
 scores, latency, tokens and cost.

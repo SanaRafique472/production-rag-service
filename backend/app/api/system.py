@@ -35,7 +35,9 @@ async def health(
     else:
         s = c.settings
         checks["cohere"] = "configured" if s.cohere_api_key else "missing COHERE_API_KEY"
-        checks["anthropic"] = "configured" if s.anthropic_api_key else "missing ANTHROPIC_API_KEY"
+        checks["llm"] = s.cohere_llm_model if s.llm_provider == "cohere" else s.llm_model
+        if s.llm_provider == "anthropic":
+            checks["anthropic"] = "configured" if s.anthropic_api_key else "missing ANTHROPIC_API_KEY"
     healthy = checks["database"] == "ok" and checks["vector_store"] == "ok"
     return HealthOut(status="ok" if healthy else "degraded", mode=c.mode, checks=checks)
 
