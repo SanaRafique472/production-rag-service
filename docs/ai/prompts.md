@@ -13,3 +13,8 @@ assignments in the same course; prompts 3 onward are this project.
 | 6 | "how to run this project" | Run instructions (now in README.md) |
 | 7 | "kia project jo portfolio 1 ki doc file baji hai os k according ha?" *(does the project match the Portfolio 1 document?)* | Requirement-by-requirement check against the PDF, list of gaps |
 | 8 | "han dy do" *(yes, fix them)* | DESIGN/EVAL/AI_USAGE additions, request tracing, Swagger screenshots, new zip |
+| 9 | "I am a complete beginner … Please inspect my entire project carefully … Do not make changes until I approve them." | Fresh-install inspection; found missing `greenlet` and the no-Docker data-loss issue |
+| 10 | Questions while running it on my computer (Windows, Python 3.11): `.env` contents, "site cannot be reached", screenshots of errors | Step-by-step help; Python 3.11 compatibility changes (numpy, `TypeVar`, pyproject) |
+| 11 | "aik word ki file dy do" *(give me a Word file)* | `docs/DocAnswer_Chalane_ka_Tareeqa.docx` run guide |
+| 12 | "jo project bna k diya ha kiay es doc k according h?" *(does the project match the brief?)* | Re-check against the PDF; remaining items are mine (evaluation run, GitHub, video) |
+| 13 | "mjhy test kr k compete project share kro" *(test and share the complete project)* | Fixes merged, clean-install tests on Python 3.11 and 3.13, final zip |

@@ -35,6 +35,7 @@ The complete chat is exported from claude.ai and submitted with the project as
 | --- | --- |
 | Upload, isolation, deletion, guardrails, errors, tracing | 128 automated tests (`make test`), all passing |
 | Provider requests/responses are shaped correctly | Contract tests run the real Anthropic, Cohere and OpenAI SDKs against mocked HTTP |
+| Fresh install works | New virtual environments on Python 3.11 and 3.13, installed only from `requirements.txt`, then all tests |
 | UI works end to end | Signup → upload → ask → monitoring → evaluation clicked through in a headless browser (test mode) |
 | Notebooks run | Executed top to bottom with outputs saved |
 | Prices and model facts in DESIGN.md | Looked up on the web in November 2026 |
@@ -47,6 +48,11 @@ The complete chat is exported from claude.ai and submitted with the project as
 * A React effect returned a value from `scrollIntoView`, which crashed the chat page: found in
   the browser check.
 * Two-page PDFs kept their running header as a chunk: found while inspecting corpus chunks.
+* `requirements.txt` was missing `greenlet` (needed by SQLAlchemy's async engine); it only worked
+  in the build environment because the package happened to be installed there. Found by
+  installing into a brand-new virtual environment, which is now part of the checks.
+* My computer has Python 3.11, but `numpy==2.5.5` and one `def f[T]()` line needed Python 3.12+.
+  Fixed (numpy 2.4.6, `TypeVar`) and tested on both Python 3.11 and 3.13; CI now runs both.
 
 ## What was NOT verified by the AI
 

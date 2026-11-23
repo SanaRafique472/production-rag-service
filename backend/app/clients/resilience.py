@@ -61,7 +61,7 @@ def classify(exc: BaseException) -> str:
     return "fatal"
 
 
-async def call_external[T](
+async def call_external(
     provider: str,
     fn: Callable[[], Awaitable[T]],
     *,
