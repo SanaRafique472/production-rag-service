@@ -18,3 +18,8 @@ assignments in the same course; prompts 3 onward are this project.
 | 11 | "aik word ki file dy do" *(give me a Word file)* | `docs/DocAnswer_Chalane_ka_Tareeqa.docx` run guide |
 | 12 | "jo project bna k diya ha kiay es doc k according h?" *(does the project match the brief?)* | Re-check against the PDF; remaining items are mine (evaluation run, GitHub, video) |
 | 13 | "mjhy test kr k compete project share kro" *(test and share the complete project)* | Fixes merged, clean-install tests on Python 3.11 and 3.13, final zip |
+| 14 | "free api key mil sakti?" / "kahn se lu" / "docker k elwa kia use kr sakty?" | Where to get free keys; running without Docker |
+| 15 | "es mei api k zero cradits h kuch free wla suggest kro" | Suggested Cohere Command A+ (free) instead of Claude |
+| 16 | "cohere ki key se chal jye ga project?" / "free suggest ko api key kahn se mil sakti ji se project fully functional ho" | Explained the code change needed for a Cohere-only setup |
+| 17 | My Cohere trial key + "doc english mei ho osi ko evalaute krye" *(write the docs in English and run the evaluation)* | Cohere Command A+ and judge added, live evaluation of A and B, EVAL.md results and failure analysis |
+| 18 | "local py project ko run krna ha live ni krana" *(run locally, do not deploy)* | Deployment (Bonus H) skipped |

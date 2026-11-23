@@ -5,8 +5,8 @@ answers **only from those documents**, with citations you can click to see the e
 If the answer is not in your files, the service says so instead of guessing.
 
 ![Chat with evidence panel](docs/screenshots/chat.png)
-<sub>Screenshots were taken in test mode (offline fake providers), so the answers show the
-mechanics, not real model quality.</sub>
+<sub>Live screenshot (Cohere Command A+ with a free trial key, 24 November 2026). The Swagger
+screenshots in `docs/screenshots/swagger/` were taken in test mode.</sub>
 
 ## Features
 
@@ -14,7 +14,8 @@ mechanics, not real model quality.</sub>
   as rows; header/footer cleaning; duplicate detection (409); scanned PDFs rejected (400).
 * **Retrieval:** hybrid dense (Cohere Embed 5) + BM25, Reciprocal Rank Fusion, Cohere Rerank 5,
   relevance threshold; the UI shows every retrieved chunk with its scores.
-* **Answers:** Claude Haiku 5.5 with built-in citations; every citation is verified against the
+* **Answers:** Cohere Command A+ (default, free on a trial key) or Claude Haiku 5.5, both with
+  built-in citations; every citation is verified against the
   chunks actually sent; refusals in English, Urdu or Arabic.
 * **Guardrails:** prompt-injection and jailbreak detection (EN/UR/AR) plus an LLM classifier,
   planted-instruction flagging in documents, canary-based output leak check.
@@ -27,11 +28,12 @@ mechanics, not real model quality.</sub>
 
 ## Quick start
 
-Requirements: Python 3.11, 3.12 or 3.13, Node 20+, Docker (optional), and API keys for
-**Cohere** and **Anthropic** (OpenAI only for evaluation judge metrics).
+Requirements: Python 3.11, 3.12 or 3.13, Node 20+, Docker (optional), and **one free Cohere
+trial key** (dashboard.cohere.com). That key runs embeddings, rerank, answers and the evaluation
+judge. Anthropic or OpenAI keys are optional alternatives (`LLM_PROVIDER`, `JUDGE_PROVIDER`).
 
 ```bash
-cp .env.example .env              # add COHERE_API_KEY, ANTHROPIC_API_KEY, and JWT_SECRET_KEY (openssl rand -hex 32)
+cp .env.example .env              # add COHERE_API_KEY and JWT_SECRET_KEY (openssl rand -hex 32)
 
 # Option 1 — everything in Docker
 docker compose up --build         # UI http://localhost:8080 · API docs http://localhost:8000/docs
@@ -58,9 +60,9 @@ mode (two processes cannot open the same Qdrant folder).
 
 | Command | What it does |
 | --- | --- |
-| `make test` | 128 pytest tests (unit, provider contracts, API) — no keys needed |
+| `make test` | 132 pytest tests (unit, provider contracts, API) — no keys needed |
 | `make lint` | ruff |
-| `make eval` | golden-set evaluation of configs A, B, C (needs keys) — see `EVAL.md` |
+| `make eval` | golden-set evaluation of configs A and B, paced for a free Cohere trial key (~15 min) — see `EVAL.md` |
 | `make notebooks` | re-execute the five pipeline notebooks |
 | `make corpus` | rebuild the evaluation corpus in `data/corpus/` |
 
@@ -118,7 +120,7 @@ placeholder JWT secret. gitleaks runs as a pre-commit hook and in CI.
 
 ## Status and limitations
 
-All tests pass with fake providers. The live path (PostgreSQL, Qdrant server, Cohere, Claude) is
-covered by contract tests but was **not run end-to-end** in the build environment because no
-API keys or Docker daemon were available; evaluation numbers are therefore pending (see
-`EVAL.md`). Other limitations are listed in `DESIGN.md` §11.
+All 132 tests pass (no keys needed). The golden-set evaluation was run live with a free Cohere
+trial key on 23 November 2026 (configs A and B); results and failure analysis are in `EVAL.md`.
+PostgreSQL and a Qdrant server were not run in the build environment (no Docker); SQLite and a
+local Qdrant folder were used. Other limitations are listed in `DESIGN.md` §11.

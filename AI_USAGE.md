@@ -9,7 +9,7 @@ How AI tools were used in this project, what was checked, and what I am responsi
 | Tool | Claude web app (claude.ai), inside a Claude Project, with code execution, file creation and web search turned on |
 | Model | Claude Opus 5.5 |
 | What it could do | write and run code in a Linux workspace (Python 3.13, Node 22), run tests, notebooks and a headless browser, search the web for current model prices and SDK changes |
-| What it could not do | no API keys for Cohere/Anthropic/OpenAI, no Docker daemon, no access to my GitHub |
+| What it could not do | no Docker daemon, no access to my GitHub; no Anthropic or OpenAI keys. I gave it my free Cohere trial key in the chat for the evaluation (kept outside the project files; to be deleted and replaced in the Cohere dashboard after the project) |
 | Settings in the app | none special; no fine-tuning, no custom system prompt besides the master prompt below |
 
 ## Prompts
@@ -33,7 +33,7 @@ The complete chat is exported from claude.ai and submitted with the project as
 
 | Claim | How it was checked |
 | --- | --- |
-| Upload, isolation, deletion, guardrails, errors, tracing | 128 automated tests (`make test`), all passing |
+| Upload, isolation, deletion, guardrails, errors, tracing | 132 automated tests (`make test`), all passing |
 | Provider requests/responses are shaped correctly | Contract tests run the real Anthropic, Cohere and OpenAI SDKs against mocked HTTP |
 | Fresh install works | New virtual environments on Python 3.11 and 3.13, installed only from `requirements.txt`, then all tests |
 | UI works end to end | Signup → upload → ask → monitoring → evaluation clicked through in a headless browser (test mode) |
@@ -53,16 +53,24 @@ The complete chat is exported from claude.ai and submitted with the project as
   installing into a brand-new virtual environment, which is now part of the checks.
 * My computer has Python 3.11, but `numpy==2.5.5` and one `def f[T]()` line needed Python 3.12+.
   Fixed (numpy 2.4.6, `TypeVar`) and tested on both Python 3.11 and 3.13; CI now runs both.
+* My Anthropic account had no API credit, so the answer model was switched to Cohere Command A+
+  (free on a trial key). A live call showed that turning its "thinking" off made it write its
+  reasoning into the answer, and that it adds file names in brackets; both are handled in code
+  and covered by contract tests.
+* The first live evaluation showed the LLM judge marking wrong refusals as correct (EVAL.md §7).
+  The numbers were reported as they came out, and the judge prompt was fixed afterwards.
 
 ## What was NOT verified by the AI
 
-* **No live run** with real Cohere/Claude/OpenAI keys, PostgreSQL or a Qdrant server. So the
-  AI produced **no evaluation numbers**; `EVAL.md` is filled in by me after `make eval`.
-* Model ids (`claude-haiku-5-5`, `embed-v5.0-*`, `rerank-v5.0-fast`, `gpt-6-luna`) must be
-  confirmed on each provider's models page.
+* The evaluation numbers in `EVAL.md` come from one real run (Cohere, 23 November 2026) made
+  by the AI in its workspace with my key; nothing was estimated or edited. The judge scores
+  still need my human-label check (`evals/human_labels_to_fill.csv`).
+* No run with PostgreSQL or a Qdrant server (no Docker), and none with Claude or OpenAI (no
+  credit); those paths are covered by contract tests only.
+* The Claude and OpenAI model ids (`claude-haiku-5-5`, `gpt-6-luna`) were not confirmed live.
 
 ## My responsibility
 
-Before submitting I run `make eval` with my own keys and write the results and failure
-analysis in `EVAL.md`; label ~20 answers to check the judge (`python -m evals.agreement`);
-read every module so I can explain it; and record the demo from `docs/demo_script.md`.
+Before submitting I re-run `make eval` on my own computer to reproduce the numbers; label the
+20 answers in `evals/human_labels_to_fill.csv` and run `python -m evals.agreement`; read every
+module so I can explain it; and record the demo from `docs/demo_script.md`.

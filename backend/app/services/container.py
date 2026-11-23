@@ -9,7 +9,7 @@ never silently falls back to fake answers. Fakes are used only when
 from dataclasses import dataclass
 
 from app.clients.embeddings import CohereEmbedder, Embedder, HashingEmbedder
-from app.clients.llm import LLM, ClaudeLLM, FakeLLM
+from app.clients.llm import LLM, ClaudeLLM, CohereLLM, FakeLLM
 from app.clients.qdrant_store import QdrantStore
 from app.clients.reranker import CohereReranker, OverlapReranker, Reranker
 from app.clients.resilience import MissingKeyProvider
@@ -47,7 +47,12 @@ def build_container(settings: Settings) -> Container:
         reranker = (
             CohereReranker(settings) if settings.cohere_api_key else MissingKeyProvider("Cohere", "COHERE_API_KEY")
         )  # type: ignore[assignment]
-        llm = ClaudeLLM(settings) if settings.anthropic_api_key else MissingKeyProvider("Claude", "ANTHROPIC_API_KEY")  # type: ignore[assignment]
+        if settings.llm_provider == "cohere":
+            llm = CohereLLM(settings) if settings.cohere_api_key else MissingKeyProvider("Cohere", "COHERE_API_KEY")  # type: ignore[assignment]
+        else:
+            llm = (
+                ClaudeLLM(settings) if settings.anthropic_api_key else MissingKeyProvider("Claude", "ANTHROPIC_API_KEY")
+            )  # type: ignore[assignment]
         dim, mode = settings.embed_dim, "live"
     store = QdrantStore(settings, dim=dim)
     config = RetrievalConfig.from_settings(settings)

@@ -85,3 +85,26 @@ def test_two_page_running_header_removed():
         TextUnit("Body two.", page=2),
     ]
     assert [u.text for u in remove_repeated_lines(units, page_count=2)] == ["Body one.", "Body two."]
+
+
+async def test_with_rate_retry_waits_then_succeeds():
+    from app.errors import UpstreamRateLimitedError
+    from evals.run import with_rate_retry
+
+    calls = {"n": 0}
+
+    async def flaky():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise UpstreamRateLimitedError("slow down")
+        return "ok"
+
+    assert await with_rate_retry(flaky, "test", waits=(0, 0, 0)) == "ok" and calls["n"] == 3
+    with pytest.raises(UpstreamRateLimitedError):
+        await with_rate_retry(_always_limited, "test", waits=(0,))
+
+
+async def _always_limited():
+    from app.errors import UpstreamRateLimitedError
+
+    raise UpstreamRateLimitedError("still limited")

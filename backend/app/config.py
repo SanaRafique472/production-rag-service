@@ -6,6 +6,7 @@ printed in logs or error messages by accident.
 """
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -62,9 +63,15 @@ class Settings(BaseSettings):
     embed_batch_size: int = 96
     embed_concurrency: int = 4
     rerank_model: str = "rerank-v5.0-fast"
-    llm_model: str = "claude-haiku-5-5"
+    # Which LLM writes the answers: "cohere" (Command A+, free on a trial key) or "anthropic" (Claude).
+    llm_provider: Literal["cohere", "anthropic"] = "cohere"
+    llm_model: str = "claude-haiku-5-5"  # used when llm_provider = "anthropic"
+    cohere_llm_model: str = "command-a-plus-05-2026"  # used when llm_provider = "cohere"
+    # Evaluation judge: "cohere" (free, same key) or "openai" (needs OPENAI_API_KEY).
+    judge_provider: Literal["cohere", "openai"] = "cohere"
+    cohere_judge_model: str = "command-a-03-2025"  # a different model from the answer model
     llm_max_tokens: int = 600
-    judge_model: str = "gpt-6-luna"  # evaluation judge (different provider); verify id
+    judge_model: str = "gpt-6-luna"  # OpenAI judge model, used when judge_provider = "openai"
     use_llm_classifier: bool = True  # extra guardrail call, run in parallel with retrieval
 
     # --- Retrieval (configuration B defaults; evals override per config) ---
@@ -111,6 +118,16 @@ class Settings(BaseSettings):
     @classmethod
     def _default_db(cls, v):  # noqa: ANN001, ANN206
         return "sqlite+aiosqlite:///./rag.sqlite3" if isinstance(v, str) and not v.strip() else v
+
+    @model_validator(mode="after")
+    def _free_llm_costs_nothing(self) -> "Settings":
+        """Command A+ is free until rate limits, so its token price is 0 unless set explicitly."""
+        if self.llm_provider == "cohere":
+            if "price_llm_in" not in self.model_fields_set:
+                self.price_llm_in = 0.0
+            if "price_llm_out" not in self.model_fields_set:
+                self.price_llm_out = 0.0
+        return self
 
     @model_validator(mode="after")
     def _safe_in_production(self) -> "Settings":

@@ -12,7 +12,7 @@ const METRICS: [string, string][] = [
 const LOWER_IS_BETTER = new Set(["latency_p50_ms", "latency_p95_ms", "avg_cost_usd"]);
 
 function cell(v: unknown, key: string) {
-  if (v === null || v === undefined) return <span className="text-stone-400" title="Not computed (judge needs OPENAI_API_KEY)">n/a</span>;
+  if (v === null || v === undefined) return <span className="text-stone-400" title="Not computed (no key for the judge)">n/a</span>;
   if (typeof v !== "number") return String(v);
   return key.endsWith("_ms") ? v.toFixed(0) : key === "avg_cost_usd" ? v.toFixed(5) : v.toFixed(3);
 }
@@ -31,7 +31,7 @@ export default function EvaluationPage() {
       <div className="card space-y-2 p-8">
         <h1 className="text-lg font-semibold text-stone-800">No evaluation runs yet</h1>
         <p className="text-sm text-stone-600">Run the golden-set evaluation (42 questions, 7 unanswerable) from the project folder:</p>
-        <pre className="rounded-lg bg-stone-900 p-3 text-sm text-stone-100">make eval        # needs COHERE_API_KEY and ANTHROPIC_API_KEY (+ OPENAI_API_KEY for judge metrics)</pre>
+        <pre className="rounded-lg bg-stone-900 p-3 text-sm text-stone-100">make eval        # needs only COHERE_API_KEY (free trial key)</pre>
         <p className="text-sm text-stone-500">Results are saved to <code>backend/evals/results/</code> and shown here.</p>
       </div>
     );

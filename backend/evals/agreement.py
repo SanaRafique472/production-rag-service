@@ -1,7 +1,7 @@
 """Check the LLM judge against your own labels (Cohen's kappa).
 
-1. Copy human_labels_template.csv to human_labels.csv.
-2. For ~20 answers from a live run, fill human_correct with 1 (correct) or 0.
+1. Copy human_labels_to_fill.csv (20 answers from the first live run) to human_labels.csv.
+2. Read each answer in the run's JSON and fill human_correct with 1 (correct) or 0.
 3. Run:  python -m evals.agreement evals/results/<run>.json
 A kappa above ~0.6 means the judge's correctness scores can be trusted for this set.
 """
