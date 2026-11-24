@@ -40,11 +40,17 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
 
     # --- Upload limits ---
-    max_upload_mb: int = Field(20, description="Hard limit on upload size in megabytes")
-    max_pages: int = Field(300, description="Maximum pages or slides per document")
-    max_zip_uncompressed_mb: int = 200  # zip-bomb guard for DOCX/PPTX
-    max_zip_ratio: int = 100  # max compression ratio of any member
+    max_upload_mb: int = Field(50, description="Hard limit on upload size in megabytes")
+    max_pages: int = Field(1000, description="Maximum pages or slides per document")
+    max_zip_uncompressed_mb: int = 400  # zip-bomb guard for DOCX/PPTX: total expanded size
+    max_zip_members: int = 20000  # zip-bomb guard: number of parts in the container
+    max_zip_ratio: int = 200  # compression ratio treated as suspicious ...
+    zip_ratio_min_member_mb: int = 50  # ... but only for members that expand beyond this size
     min_chars_per_page: int = 20  # below this on average -> "no extractable text"
+    # Legacy .doc / .rtf: "auto" uses LibreOffice when installed (best fidelity), else the built-in reader.
+    doc_converter: Literal["auto", "libreoffice", "builtin"] = "auto"
+    libreoffice_timeout_s: float = 90.0
+    store_original_files: bool = True  # keep uploads so a document can be re-processed without re-uploading
 
     # --- Chunking (proposed configuration B) ---
     chunk_size_tokens: int = 400
@@ -70,7 +76,7 @@ class Settings(BaseSettings):
     # Evaluation judge: "cohere" (free, same key) or "openai" (needs OPENAI_API_KEY).
     judge_provider: Literal["cohere", "openai"] = "cohere"
     cohere_judge_model: str = "command-a-03-2025"  # a different model from the answer model
-    llm_max_tokens: int = 600
+    llm_max_tokens: int = 1000
     judge_model: str = "gpt-6-luna"  # OpenAI judge model, used when judge_provider = "openai"
     use_llm_classifier: bool = True  # extra guardrail call, run in parallel with retrieval
 
@@ -83,11 +89,14 @@ class Settings(BaseSettings):
     retrieval_top_n: int = 6
     rerank_threshold: float = 0.35  # calibrated 0-1 score; tuned on the golden set
     dense_threshold: float = 0.30  # cosine floor when reranking is off; tuned on the golden set
+    # When the question is scoped to documents this small (in tokens), the whole document is sent to
+    # the model instead of only the top chunks, so summaries and "whole document" questions work.
+    full_context_max_tokens: int = 12000
 
     # --- Timeouts / retries (every external call) ---
     http_timeout_s: float = 30.0
     max_retries: int = 3
-    ingestion_timeout_s: float = 120.0
+    ingestion_timeout_s: float = 240.0
 
     # --- Rate limits (per user or IP) ---
     rate_limit_ask: str = "20/minute"

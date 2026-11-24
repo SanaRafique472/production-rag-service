@@ -3,12 +3,22 @@
 Each file targets something the ingestion pipeline must handle: headings,
 tables, repeated headers/footers, hyphenated line breaks, Urdu text, a
 scanned (image-only) PDF, an empty file and a disguised executable.
+
+Word-specific samples reproduce what real Word files contain and what used to
+break uploads or lose text: content controls, tracked changes, text boxes,
+fields, numbered lists, merged cells, and highly compressible parts (a blank
+BMP image) that tripped the old zip-bomb ratio check. ``leave_policy_legacy.doc``
+is a real Word 97-2003 file written by LibreOffice (kept as a binary fixture).
 """
 
+import io
+import shutil
 from pathlib import Path
 
 import pymupdf
 from docx import Document
+from docx.oxml import parse_xml
+from PIL import Image
 from pptx import Presentation
 from pptx.util import Inches
 
@@ -106,6 +116,74 @@ def _make_slides_pptx(path: Path) -> None:
     prs.save(path)
 
 
+_W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+_MC = 'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"'
+_V = 'xmlns:v="urn:schemas-microsoft-com:vml"'
+LEGACY_DOC = Path(__file__).parent / "files" / "leave_policy_legacy.doc"
+
+
+def _make_word_features_docx(path: Path) -> None:
+    """DOCX using the Word features python-docx's simple reading skipped."""
+    d = Document()
+    d.add_heading("Service Contract", level=0)
+    body = d.element.body
+    body.insert(
+        len(body) - 1,
+        parse_xml(
+            f"<w:sdt {_W}><w:sdtPr><w:alias w:val='Client'/></w:sdtPr><w:sdtContent>"
+            "<w:p><w:r><w:t>The client is Northwind Traders Ltd, registered in Lahore.</w:t></w:r></w:p>"
+            "</w:sdtContent></w:sdt>"
+        ),
+    )
+    p = d.add_paragraph("Termination notice: ")
+    p._p.append(parse_xml(f"<w:ins {_W} w:id='1' w:author='A'><w:r><w:t>sixty days in writing.</w:t></w:r></w:ins>"))
+    p._p.append(parse_xml(f"<w:del {_W} w:id='2' w:author='A'><w:r><w:delText>thirty days.</w:delText></w:r></w:del>"))
+    p = d.add_paragraph("Contract value: ")
+    for run in (  # complex field: the code (instrText) must be dropped, the result kept
+        "<w:fldChar w:fldCharType='begin'/>",
+        "<w:instrText>DOCPROPERTY Value</w:instrText>",
+        "<w:fldChar w:fldCharType='separate'/>",
+        "<w:t>PKR 4,500,000</w:t>",
+        "<w:fldChar w:fldCharType='end'/>",
+    ):
+        p._p.append(parse_xml(f"<w:r {_W}>{run}</w:r>"))
+    p = d.add_paragraph()
+    p._p.append(  # text box stored twice (modern Choice + VML Fallback): must be read once
+        parse_xml(
+            f"<w:r {_W}><mc:AlternateContent {_MC}><mc:Choice Requires='wps'><w:drawing>"
+            "<w:txbxContent><w:p><w:r><w:t>Governing law is the law of Pakistan.</w:t></w:r></w:p></w:txbxContent>"
+            f"</w:drawing></mc:Choice><mc:Fallback><w:pict><v:shape {_V}><v:textbox><w:txbxContent><w:p><w:r>"
+            "<w:t>Governing law is the law of Pakistan.</w:t></w:r></w:p></w:txbxContent></v:textbox></v:shape>"
+            "</w:pict></mc:Fallback></mc:AlternateContent></w:r>"
+        )
+    )
+    d.add_heading("Payment steps", level=1)
+    for text in ["Send the invoice.", "Wait for approval.", "Receive payment."]:
+        d.add_paragraph(text, style="List Number")
+    d.add_paragraph("Bring your ID card.", style="List Bullet")
+    t = d.add_table(rows=3, cols=4)
+    rows = [["Region", "Item", "Q1", "Q2"], ["North", "Licences", "5", "5"], ["", "Support", "Included", ""]]
+    for i, row in enumerate(rows):
+        for j, value in enumerate(row):
+            t.cell(i, j).text = value
+    t.cell(2, 2).merge(t.cell(2, 3))  # horizontal merge: "Included" spans Q1-Q2
+    t.cell(1, 0).merge(t.cell(2, 0))  # vertical merge: "North" spans both rows
+    d.save(path)
+
+
+def _make_blank_image_docx(path: Path) -> None:
+    """A normal DOCX with a blank BMP image: that part compresses ~1000:1 (rejected before the fix)."""
+    d = Document()
+    d.add_heading("Site Inspection Report", level=0)
+    d.add_paragraph("Inspection of the Gulberg branch was completed on 12 May 2026 by Ahmed Khan.")
+    buf = io.BytesIO()
+    Image.new("RGB", (1200, 1200), "white").save(buf, "BMP")
+    buf.seek(0)
+    d.add_picture(buf)
+    d.add_paragraph("Two emergency lights failed and must be replaced by 30 June 2026.")
+    d.save(path)
+
+
 def build_samples(out_dir: Path) -> dict[str, Path]:
     """Write every sample file into ``out_dir`` and return their paths by name."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -118,7 +196,13 @@ def build_samples(out_dir: Path) -> dict[str, Path]:
         "urdu_txt": out_dir / "urdu_notice.txt",
         "empty_pdf": out_dir / "empty.pdf",
         "fake_pdf": out_dir / "invoice.pdf",
+        "features_docx": out_dir / "service_contract.docx",
+        "blank_image_docx": out_dir / "site_inspection.docx",
+        "legacy_doc": out_dir / "leave_policy_legacy.doc",
     }
+    _make_word_features_docx(paths["features_docx"])
+    _make_blank_image_docx(paths["blank_image_docx"])
+    shutil.copyfile(LEGACY_DOC, paths["legacy_doc"])
     _make_policy_pdf(paths["policy_pdf"])
     _make_scanned_pdf(paths["scanned_pdf"])
     _make_handbook_docx(paths["handbook_docx"])

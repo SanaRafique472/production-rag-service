@@ -166,6 +166,16 @@ class QdrantStore:
         )
         return await self.count_document(user_id, document_id)
 
+    async def delete_points(self, ids: list[str]) -> None:
+        """Delete specific points (used to drop stale chunks after a document is re-processed)."""
+        for i in range(0, len(ids), 512):
+            batch = ids[i : i + 512]
+            await self._call(
+                lambda b=batch: self._client.delete(
+                    self.collection, points_selector=models.PointIdsList(points=b), wait=True
+                )
+            )
+
     async def ping(self) -> bool:
         """Return True when Qdrant answers."""
         try:

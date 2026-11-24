@@ -1,6 +1,6 @@
 # Production RAG Service — Document Question Answering
 
-Upload your own documents (PDF, DOCX, PPTX, TXT, MD), ask questions in plain language, and get
+Upload your own documents (PDF, DOCX, DOC, RTF, PPTX, TXT, MD), ask questions in plain language, and get
 answers **only from those documents**, with citations you can click to see the exact passage.
 If the answer is not in your files, the service says so instead of guessing.
 
@@ -10,7 +10,9 @@ screenshots in `docs/screenshots/swagger/` were taken in test mode.</sub>
 
 ## Features
 
-* **Ingestion:** PDF, DOCX, PPTX, TXT, MD; page/slide and heading-section metadata; tables kept
+* **Ingestion:** PDF, DOCX, DOC (Word 97-2003), RTF, PPTX, TXT, MD; Word files are recognised by content
+  (renamed .doc/.docx work), DOCX content controls, tracked insertions, text boxes, fields, numbered
+  lists, merged cells, footnotes and headers are read; page/slide and heading-section metadata; tables kept
   as rows; header/footer cleaning; duplicate detection (409); scanned PDFs rejected (400).
 * **Retrieval:** hybrid dense (Cohere Embed 5) + BM25, Reciprocal Rank Fusion, Cohere Rerank 5,
   relevance threshold; the UI shows every retrieved chunk with its scores.
@@ -56,11 +58,29 @@ mode (two processes cannot open the same Qdrant folder).
 
 **Windows step-by-step guide for beginners:** [`docs/DocAnswer_Chalane_ka_Tareeqa.docx`](docs/DocAnswer_Chalane_ka_Tareeqa.docx).
 
+## Documents: upload, reload, ask
+
+* **Upload** on the Documents page (drag and drop or click). Files are checked in the browser (type,
+  size), then the upload shows byte progress and a *processing* step while the text is read and indexed.
+* **View text** shows exactly what was extracted (headings, lists, tables) and is used for answers.
+* **Reload** re-processes a document without uploading it again: the original file is stored, so it is
+  re-read with the current extractors and re-indexed in place. A failed reload keeps the working index.
+  Documents uploaded before files were stored are re-indexed from their stored text.
+* **Ask** opens the chat focused on that document. When the selected document fits in the model's
+  context (`FULL_CONTEXT_MAX_TOKENS`, default 12 000 tokens) the whole document is sent, so summaries and
+  detail questions see everything; larger documents use hybrid retrieval. If the answer is not in the
+  document the reply is exactly *"This information is not available in the uploaded document."*
+* The selected document and the current chat survive page changes and browser refreshes.
+
+Legacy `.doc` files are read by a built-in pure-Python reader. If LibreOffice (`soffice`) is installed
+it is used as well for full heading/list fidelity (`DOC_CONVERTER=auto|libreoffice|builtin`; Docker:
+`docker compose build --build-arg INSTALL_LIBREOFFICE=true api`). See `FIXES.md` for the upload fix.
+
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `make test` | 132 pytest tests (unit, provider contracts, API) — no keys needed |
+| `make test` | 161 pytest tests (unit, provider contracts, API) — no keys needed |
 | `make lint` | ruff |
 | `make eval` | golden-set evaluation of configs A and B, paced for a free Cohere trial key (~15 min) — see `EVAL.md` |
 | `make notebooks` | re-execute the five pipeline notebooks |
@@ -76,6 +96,9 @@ Interactive docs at `/docs`. Main endpoints:
 | POST | `/auth/login` | OAuth2 form → JWT |
 | GET | `/auth/me` | current user |
 | POST | `/documents` | upload one file (201; 400/409/413/415) |
+| GET | `/documents/limits` | accepted extensions and size/page limits |
+| GET | `/documents/{id}/content` | the extracted text in reading order (as used for answers) |
+| POST | `/documents/{id}/reload` | re-process a stored document without uploading it again |
 | GET | `/documents` | list your documents |
 | GET / DELETE | `/documents/{id}` | one document / delete it and its vectors (204) |
 | POST | `/chat/ask` | answer with citations and retrieval evidence, or a refusal |
@@ -120,7 +143,7 @@ placeholder JWT secret. gitleaks runs as a pre-commit hook and in CI.
 
 ## Status and limitations
 
-All 132 tests pass (no keys needed). The golden-set evaluation was run live with a free Cohere
+All 161 tests pass (no keys needed). The golden-set evaluation was run live with a free Cohere
 trial key on 23 November 2026 (configs A and B); results and failure analysis are in `EVAL.md`.
 PostgreSQL and a Qdrant server were not run in the build environment (no Docker); SQLite and a
 local Qdrant folder were used. Other limitations are listed in `DESIGN.md` §11.

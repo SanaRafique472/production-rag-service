@@ -43,6 +43,12 @@ class CorruptFileError(AppError):
     status_code, code = 400, "CORRUPT_FILE"
 
 
+class EncryptedFileError(AppError):
+    """The document is password-protected, so its text cannot be read."""
+
+    status_code, code = 400, "ENCRYPTED_FILE"
+
+
 class FileTooLargeError(AppError):
     """The file exceeds the size or page limit."""
 

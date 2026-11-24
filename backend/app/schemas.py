@@ -25,6 +25,7 @@ ERROR_CATALOG: dict[str, tuple[int, str]] = {
     "EMPTY_FILE": (400, "The uploaded file is empty."),
     "NO_EXTRACTABLE_TEXT": (400, "No extractable text found. The file may be scanned images or empty."),
     "CORRUPT_FILE": (400, "The file is damaged or password-protected and cannot be read."),
+    "ENCRYPTED_FILE": (400, "This Word file is password-protected. Remove the password and upload it again."),
     "PROMPT_INJECTION_DETECTED": (
         400,
         "This request tries to change or reveal the assistant's instructions and was blocked.",
@@ -34,7 +35,7 @@ ERROR_CATALOG: dict[str, tuple[int, str]] = {
     "NOT_FOUND": (404, "Document not found."),
     "DUPLICATE_DOCUMENT": (409, "This file was already uploaded as leave_policy.pdf."),
     "EMAIL_ALREADY_REGISTERED": (409, "An account with this email already exists."),
-    "FILE_TOO_LARGE": (413, "File is larger than 20 MB."),
+    "FILE_TOO_LARGE": (413, "File is larger than 50 MB."),
     "UNSUPPORTED_FILE_TYPE": (415, "Unsupported file type '.exe'."),
     "VALIDATION_ERROR": (422, "The request is invalid."),
     "INVALID_QUESTION": (422, "The question is empty."),
@@ -91,12 +92,16 @@ class DocumentOut(BaseModel):
     filename: str = Field(examples=["leave_policy.pdf"])
     file_type: str = Field(examples=["pdf"])
     size_bytes: int
-    page_count: int | None = Field(None, description="Pages (PDF) or slides (PPTX); null for DOCX/TXT/MD")
+    page_count: int | None = Field(None, description="Pages (PDF) or slides (PPTX); null for DOC/DOCX/TXT/MD")
     chunk_count: int
     flagged_chunks: int = Field(0, description="Chunks containing text that looks like instructions to an AI")
     empty_pages: list[int] = Field(default_factory=list, description="Pages with no extractable text")
-    status: str = Field(examples=["ready"])
+    status: str = Field(examples=["ready"], description="processing | ready | failed")
     created_at: datetime
+    can_reprocess: bool = Field(
+        False, description="The original file is stored, so reload re-extracts it (otherwise it re-indexes stored text)"
+    )
+    last_error: str | None = Field(None, description="Why the last processing failed, if it did")
 
 
 class DocumentList(BaseModel):
@@ -104,6 +109,42 @@ class DocumentList(BaseModel):
 
     items: list[DocumentOut]
     total: int
+
+
+class ContentBlock(BaseModel):
+    """One chunk of a document's extracted text, in reading order."""
+
+    position: int
+    section: str | None
+    page_start: int | None
+    page_end: int | None
+    kind: str = Field(examples=["text", "table"])
+    text: str
+
+
+class DocumentContent(BaseModel):
+    """The extracted, cleaned text of a document as it is used for answers."""
+
+    document: DocumentOut
+    blocks: list[ContentBlock]
+    total_blocks: int
+    total_tokens: int
+
+
+class ReloadOut(BaseModel):
+    """Result of re-processing a stored document."""
+
+    document: DocumentOut
+    mode: str = Field(description="'reextracted' (from the stored original file) or 'reindexed' (from stored text)")
+    previous_chunk_count: int
+
+
+class UploadLimits(BaseModel):
+    """What the upload endpoint accepts, so clients can validate before sending."""
+
+    max_upload_mb: int
+    max_pages: int
+    extensions: list[str]
 
 
 # ---------- chat ----------
@@ -170,6 +211,10 @@ class AskResponse(BaseModel):
     session_id: str
     message_id: str
     citations: list[CitationOut]
+    context_mode: str = Field(
+        "retrieval",
+        description="'full_document' when the whole selected document fit in the model context, else 'retrieval'",
+    )
     retrieved_count: int = Field(description="Number of candidate chunks fetched")
     kept_count: int = Field(description="Number of chunks that passed the threshold and were sent to the LLM")
     retrieved_chunks: list[RetrievedChunkOut]

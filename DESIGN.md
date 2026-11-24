@@ -168,7 +168,7 @@ both) because the corpus is small; that is a stated limitation.
 | Instructions planted in documents | Flagged at upload (`flagged_chunks`, ⚠ in UI); prompt says search results are data | Content is used only as evidence |
 | System-prompt or key leakage | Canary token, 80-char overlap check, secret patterns | Answer replaced by refusal `output_blocked` |
 | Off-topic tasks ("write a poem") | Classifier label `off_topic` | Refusal, no LLM generation |
-| Malicious files | Extension + magic-byte check, zip-bomb ratio/size limits, page limit, 20 MB limit, extraction in a thread with a 120 s timeout | 400 / 413 / 415 |
+| Malicious files | Extension + magic-byte/content check, zip-bomb limits on total expanded size and member count (ratio only for members over 50 MB), page limit, 50 MB limit, extraction in a thread with a 240 s timeout; password-protected Word files get a clear 400 `ENCRYPTED_FILE` | 400 / 413 / 415 |
 | Secrets in logs | JSON logs pass through `redact_secrets`; keys are `SecretStr` | — |
 
 ## 6. Security and multi-user isolation
@@ -205,7 +205,7 @@ falls back to fake answers.
 | 401 | missing, invalid or expired token |
 | 404 | document or session not found / not owned |
 | 409 | duplicate document, email already registered |
-| 413 | file over 20 MB or over 300 pages |
+| 413 | file over 50 MB or over 1000 pages |
 | 415 | unsupported or disguised file type |
 | 422 | invalid request body / empty or too-long question |
 | 429 | rate limit (ours or the provider's) |
@@ -249,7 +249,7 @@ falls back to fake answers.
   `/metrics`, `/evals`, `/health`. Methods follow HTTP meaning: `POST /documents` creates
   (201), `DELETE /documents/{id}` removes (204), `GET` lists and reads.
 * **Upload is synchronous** and returns the finished document (chunk count, pages, flagged
-  chunks), so the UI can show the result immediately. Limits (20 MB, 300 pages, 120 s
+  chunks), so the UI can show the result immediately. Limits (50 MB, 1000 pages, 240 s
   extraction timeout) keep this safe; a background queue is the next step for bigger files.
 * **`POST /chat/ask` returns the evidence with the answer** (citations, every retrieved chunk
   with its scores, timings, tokens, cost, request id). One round trip fills the chat and the
@@ -320,7 +320,7 @@ built-in citations).
 * No OCR: scanned pages are rejected (would need Tesseract or a layout model).
 * Schema is created with `create_all`; a real deployment should add Alembic migrations.
 * Rate limiting and the metrics store are single-instance designs.
-* Uploads are processed synchronously inside the request (fine up to 20 MB / 300 pages); a job
+* Uploads are processed synchronously inside the request (fine up to 50 MB / 1000 pages); a job
   queue would be the next step for large files.
 * The live providers were run end to end in the evaluation (Cohere embeddings, rerank,
   Command A+ and judge). PostgreSQL and a Qdrant server were not (no Docker daemon in the build

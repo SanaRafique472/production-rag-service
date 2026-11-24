@@ -319,6 +319,7 @@ async def test_openapi_documents_each_error_code(client):
         "EMPTY_FILE",
         "NO_EXTRACTABLE_TEXT",
         "CORRUPT_FILE",
+        "ENCRYPTED_FILE",
     }
     assert "DUPLICATE_DOCUMENT" in upload["409"]["content"]["application/json"]["examples"]
     ask = spec["paths"]["/chat/ask"]["post"]["responses"]

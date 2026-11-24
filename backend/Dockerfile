@@ -3,6 +3,14 @@ FROM python:3.13-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 
+# Optional: LibreOffice for the highest-fidelity legacy .doc/.rtf conversion (adds ~400 MB).
+# The built-in pure-Python .doc reader works without it.
+#   docker compose build --build-arg INSTALL_LIBREOFFICE=true api
+ARG INSTALL_LIBREOFFICE=false
+RUN if [ "$INSTALL_LIBREOFFICE" = "true" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends libreoffice-writer-nogui \
+      && rm -rf /var/lib/apt/lists/*; fi
+
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 

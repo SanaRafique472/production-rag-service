@@ -11,6 +11,7 @@ from app.errors import NoExtractableTextError
 from app.ingestion.chunking import PROPOSED, Chunk, ChunkingConfig, chunk_document
 from app.ingestion.cleaning import clean_units
 from app.ingestion.extractors.base import ExtractedDocument, TextUnit
+from app.ingestion.extractors.legacy_doc import extract_doc, extract_rtf
 from app.ingestion.extractors.office import extract_docx, extract_pptx
 from app.ingestion.extractors.pdf import extract_pdf
 from app.ingestion.extractors.text import extract_text
@@ -37,6 +38,10 @@ def extract(file_type: FileType, data: bytes, settings: Settings) -> ExtractedDo
         return extract_pdf(data, settings.max_pages)
     if file_type is FileType.DOCX:
         return extract_docx(data)
+    if file_type is FileType.DOC:
+        return extract_doc(data, settings)
+    if file_type is FileType.RTF:
+        return extract_rtf(data, settings)
     if file_type is FileType.PPTX:
         return extract_pptx(data, settings.max_pages)
     return extract_text(data, markdown=file_type is FileType.MD)

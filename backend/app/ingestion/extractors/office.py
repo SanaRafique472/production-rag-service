@@ -1,69 +1,20 @@
 """DOCX and PPTX extraction.
 
 DOCX has no fixed pages, so its location metadata is the *section*: the
-heading path built from Word's Heading styles. Paragraphs and tables are read
-in their real document order. PPTX uses the slide number as the "page".
+heading path built from Word's Heading styles. DOCX is read by
+``app.ingestion.extractors.word`` (re-exported here). PPTX uses the slide
+number as the "page".
 """
 
 import io
-import re
 
-from docx import Document
-from docx.table import Table
-from docx.text.paragraph import Paragraph
 from pptx import Presentation
 
 from app.errors import CorruptFileError, FileTooLargeError
-from app.ingestion.extractors.base import (
-    ExtractedDocument,
-    SectionTracker,
-    TextUnit,
-    rows_to_markdown,
-)
+from app.ingestion.extractors.base import ExtractedDocument, TextUnit, rows_to_markdown
+from app.ingestion.extractors.word import extract_docx
 
-
-def _heading_level(style_name: str) -> int | None:
-    """Map Word style names ('Title', 'Heading 2') to a heading level."""
-    if style_name == "Title":
-        return 1
-    match = re.match(r"Heading (\d)", style_name)
-    return int(match.group(1)) + 1 if match else None  # Title sits above Heading 1
-
-
-def extract_docx(data: bytes) -> ExtractedDocument:
-    """Extract paragraphs and tables from a DOCX in reading order."""
-    try:
-        doc = Document(io.BytesIO(data))
-    except Exception as exc:
-        raise CorruptFileError("The DOCX file is corrupt or unreadable.") from exc
-
-    sections = SectionTracker()
-    units: list[TextUnit] = []
-    for child in doc.element.body.iterchildren():
-        tag = child.tag.rsplit("}", 1)[-1]
-        if tag == "p":
-            para = Paragraph(child, doc)
-            text = para.text.strip()
-            if not text:
-                continue
-            level = _heading_level(para.style.name if para.style is not None else "")
-            if level:
-                sections.push(level, text)
-            else:
-                units.append(TextUnit(text=text, section=sections.path))
-        elif tag == "tbl":
-            table = Table(child, doc)
-            rows: list[list[str | None]] = []
-            for row in table.rows:
-                cells: list[str | None] = []
-                for cell in row.cells:  # merged cells repeat; drop consecutive repeats
-                    if not cells or cell.text != cells[-1]:
-                        cells.append(cell.text)
-                rows.append(cells)
-            md = rows_to_markdown(rows)
-            if md:
-                units.append(TextUnit(text=md, section=sections.path, kind="table"))
-    return ExtractedDocument(units=units, page_count=None)
+__all__ = ["extract_docx", "extract_pptx"]
 
 
 def extract_pptx(data: bytes, max_pages: int) -> ExtractedDocument:

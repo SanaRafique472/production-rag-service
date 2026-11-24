@@ -4,10 +4,14 @@ Flow for one question:
 1. Pattern guardrails (instant) -> 400 for injection/jailbreak, 422 for empty.
 2. No documents yet -> polite refusal (no paid calls).
 3. Retrieval and the LLM classifier run **in parallel** (``asyncio.gather``).
-4. Classifier says injection/jailbreak -> 400. Nothing passes the score gate ->
-   refusal (reason ``off_topic`` or ``no_relevant_chunks``), no LLM call.
-5. Generation with validated citations; output guardrail checks for leaks.
-6. Question and answer (with a snapshot of the evidence) are saved.
+4. Classifier says injection/jailbreak -> 400. Off-topic -> refusal.
+5. Context: when every document in scope fits in ``full_context_max_tokens``, the
+   model gets the **whole document** in reading order (so summaries and
+   "anything in this document" questions work, and absence is judged on the
+   full text). Otherwise the retrieved chunks that pass the score gate are
+   used; if none pass -> refusal ``no_relevant_chunks``, no LLM call.
+6. Generation with validated citations; output guardrail checks for leaks.
+7. Question and answer (with a snapshot of the evidence) are saved.
 """
 
 import asyncio
@@ -18,11 +22,11 @@ from dataclasses import asdict
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ChatMessage, ChatSession, Document
+from app.db.models import ChatMessage, ChatSession, ChunkRow, Document
 from app.errors import InvalidQuestionError, JailbreakError, NotFoundError, PromptInjectionError
 from app.generation import GenerationResult, detect_language, refusal_message
 from app.guardrails import check_output, check_question
-from app.retrieval import RetrievalResult
+from app.retrieval import RetrievalResult, RetrievedChunk
 from app.schemas import AskRequest
 from app.services.container import Container
 
@@ -38,6 +42,51 @@ async def _classify(c: Container, question: str) -> tuple[str, int, int]:
     except Exception:
         log.warning("classifier unavailable; continuing with pattern guardrails only")
         return "ok", 0, 0
+
+
+async def _full_document_context(
+    db: AsyncSession, doc_filter: list, budget: int, retrieval: RetrievalResult
+) -> list[RetrievedChunk] | None:
+    """All chunks of the documents in scope, in reading order, if they fit in ``budget`` tokens."""
+    if budget <= 0:
+        return None
+    scope = select(Document.id).where(*doc_filter)
+    total = await db.scalar(
+        select(func.coalesce(func.sum(ChunkRow.token_count), 0)).where(ChunkRow.document_id.in_(scope))
+    )
+    if not total or total > budget:
+        return None
+    rows = await db.execute(
+        select(ChunkRow, Document.filename)
+        .join(Document, Document.id == ChunkRow.document_id)
+        .where(ChunkRow.document_id.in_(scope))
+        .order_by(Document.created_at, ChunkRow.document_id, ChunkRow.position)
+    )
+    scored = {ch.chunk_id: ch for ch in retrieval.candidates}
+    out: list[RetrievedChunk] = []
+    for row, filename in rows.all():
+        hit = scored.get(row.id)
+        out.append(
+            RetrievedChunk(
+                chunk_id=row.id,
+                document_id=row.document_id,
+                filename=filename,
+                position=row.position,
+                page_start=row.page_start,
+                page_end=row.page_end,
+                section=row.section,
+                text=row.content,
+                kind=row.kind,
+                suspicious=row.suspicious,
+                similarity=hit.similarity if hit else None,
+                dense_rank=hit.dense_rank if hit else None,
+                bm25_rank=hit.bm25_rank if hit else None,
+                rrf_score=hit.rrf_score if hit else 0.0,
+                rerank_score=hit.rerank_score if hit else None,
+                kept=True,
+            )
+        )
+    return out
 
 
 async def _session(db: AsyncSession, user_id: str, session_id: str | None, title: str) -> ChatSession:
@@ -75,6 +124,8 @@ async def ask(db: AsyncSession, c: Container, user_id: str, req: AskRequest, req
     doc_count = await db.scalar(select(func.count()).select_from(Document).where(*doc_filter)) or 0
 
     retrieval: RetrievalResult | None = None
+    context: list[RetrievedChunk] = []
+    context_mode = "retrieval"
     gen = GenerationResult(answer="")
     cls_in = cls_out = 0
     llm_ms: int | None = None
@@ -94,12 +145,20 @@ async def ask(db: AsyncSession, c: Container, user_id: str, req: AskRequest, req
             )
         if label == "jailbreak":
             raise JailbreakError("This request tries to bypass the assistant's rules and was blocked.")
-        if label == "off_topic" or not retrieval.kept:  # e.g. "write a poem": not a document question
+        full = (
+            None
+            if label == "off_topic"
+            else await _full_document_context(db, doc_filter, s.full_context_max_tokens, retrieval)
+        )
+        context = full if full is not None else retrieval.kept
+        if full is not None:
+            context_mode = "full_document"
+        if label == "off_topic" or not context:  # e.g. "write a poem": not a document question
             reason = "off_topic" if label == "off_topic" else "no_relevant_chunks"
             gen = GenerationResult(answer=refusal_message(reason, language), refused=True, refusal_reason=reason)
         else:
             t_llm = time.perf_counter()
-            gen = await c.generator.generate(question, retrieval.kept, language)
+            gen = await c.generator.generate(question, context, language)
             llm_ms = int((time.perf_counter() - t_llm) * 1000)
             leak = check_output(gen.answer, c.generator.canary, c.generator.system_prompt)
             if leak:
@@ -123,10 +182,8 @@ async def ask(db: AsyncSession, c: Container, user_id: str, req: AskRequest, req
     ) / 1_000_000
 
     cited_ids = {ct.chunk_id for ct in gen.citations}
-    chunks_out = [
-        {**{k: v for k, v in asdict(ch).items()}, "cited": ch.chunk_id in cited_ids}
-        for ch in (retrieval.candidates if retrieval else [])
-    ]
+    evidence = context if context_mode == "full_document" else (retrieval.candidates if retrieval else [])
+    chunks_out = [{**asdict(ch), "cited": ch.chunk_id in cited_ids} for ch in evidence]
     citations_out = [asdict(ct) for ct in gen.citations]
     latency_ms = int((time.perf_counter() - t0) * 1000)
     timings = {**(retrieval.timings_ms if retrieval else {}), **({"llm_ms": llm_ms} if llm_ms is not None else {})}
@@ -157,6 +214,7 @@ async def ask(db: AsyncSession, c: Container, user_id: str, req: AskRequest, req
         "session_id": session.id,
         "message_id": answer_msg.id,
         "citations": citations_out,
+        "context_mode": context_mode,
         "retrieved_count": len(chunks_out),
         "kept_count": sum(1 for ch in chunks_out if ch["kept"]),
         "retrieved_chunks": chunks_out,

@@ -31,14 +31,16 @@ function ChunkCard({ c, highlight }: { c: Chunk; highlight: boolean }) {
 
 export default function EvidencePanel({ res, focus }: { res: AskResponse | null; focus: string | null }) {
   if (!res) return <div className="card p-6 text-sm text-stone-400">Retrieved chunks, scores and citations appear here after you ask a question.</div>;
-  const kept = res.retrieved_chunks.filter((c) => c.kept);
+  const full = res.context_mode === "full_document";
+  // Whole-document answers send every chunk: show the cited ones first.
+  const kept = res.retrieved_chunks.filter((c) => c.kept).sort((a, b) => (full ? Number(b.cited) - Number(a.cited) : 0));
   const rest = res.retrieved_chunks.filter((c) => !c.kept);
   return (
     <div className="card space-y-3 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-medium text-stone-800">Evidence</h2>
         <span className="text-xs text-stone-500">
-          {res.retrieved_count} retrieved · {res.kept_count} sent to LLM · config {res.retrieval_config}
+          {full ? `whole document · ${res.kept_count} chunks sent to LLM` : `${res.retrieved_count} retrieved · ${res.kept_count} sent to LLM`} · config {res.retrieval_config}
         </span>
       </div>
       <div className="grid grid-cols-3 gap-2 text-center text-xs">

@@ -9,7 +9,19 @@ before the row is deleted.
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -59,6 +71,21 @@ class Document(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     owner: Mapped[User] = relationship(back_populates="documents")
     chunks: Mapped[list["ChunkRow"]] = relationship(back_populates="document", cascade="all, delete-orphan")
+
+
+class DocumentFile(Base):
+    """The original uploaded bytes, so a document can be re-processed without uploading it again.
+
+    A separate table (not a column on ``documents``) so existing databases gain it
+    through ``create_all`` without a migration, and listing documents never loads blobs.
+    """
+
+    __tablename__ = "document_files"
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)  # message of the last failed processing
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class ChunkRow(Base):

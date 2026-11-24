@@ -20,6 +20,47 @@ from app.ingestion.extractors.base import (
 )
 
 _BOLD_FLAG = 16  # PyMuPDF span flag bit for bold text
+# Up to this many pages, table detection also uses PyMuPDF's ML layout model (finds borderless
+# tables, ~0.2 s per page). Longer PDFs use the fast vector-line detector so large documents
+# finish well inside the ingestion timeout.
+LAYOUT_MAX_PAGES = 40
+
+
+def _find_tables(page: pymupdf.Page, use_layout: bool) -> list:
+    """Best-effort table detection; pages without vector drawings cannot have ruled tables."""
+    try:
+        if not use_layout and not page.get_cdrawings():
+            return []
+        return page.find_tables(use_layout=use_layout).tables
+    except Exception:  # table detection is best-effort
+        return []
+
+
+def _cell_texts(page: pymupdf.Page, table) -> list[list[str]]:  # noqa: ANN001
+    """Text of every cell, from one word list per page (one clip per cell re-parses the page)."""
+    words = page.get_text("words")  # (x0, y0, x1, y1, word, block, line, word_no)
+    rows: list[list[str]] = []
+    for row in table.rows:
+        cells: list[str] = []
+        for cell in row.cells:
+            if not cell:
+                cells.append("")
+                continue
+            x0, y0, x1, y1 = cell
+            inside = [w for w in words if x0 <= (w[0] + w[2]) / 2 <= x1 and y0 <= (w[1] + w[3]) / 2 <= y1]
+            inside.sort(key=lambda w: (w[5], w[6], w[7]))
+            lines: list[str] = []
+            last = None
+            for w in inside:
+                key = (w[5], w[6])
+                if key != last:
+                    lines.append(w[4])
+                    last = key
+                else:
+                    lines[-1] += " " + w[4]
+            cells.append("\n".join(lines))
+        rows.append(cells)
+    return rows
 
 
 def _overlaps(block_bbox: tuple, rects: list[pymupdf.Rect]) -> bool:
@@ -83,19 +124,16 @@ def extract_pdf(data: bytes, max_pages: int) -> ExtractedDocument:
     units: list[TextUnit] = []
     empty_pages: list[int] = []
 
+    use_layout = doc.page_count <= LAYOUT_MAX_PAGES
     for page in doc:
         page_no = page.number + 1
         items: list[tuple[float, str, str, int]] = []  # (y, kind, text, heading_level)
 
-        try:
-            tables = page.find_tables().tables
-        except Exception:  # table detection is best-effort
-            tables = []
+        tables = _find_tables(page, use_layout)
         table_rects = [pymupdf.Rect(t.bbox) for t in tables]
         for t in tables:
-            # Read each cell from its own rectangle: Table.extract() can drop word spaces.
-            rows = [[page.get_text("text", clip=cell).strip() if cell else "" for cell in row.cells] for row in t.rows]
-            md = rows_to_markdown(rows)
+            # Read cells from the page's words: Table.extract() can drop word spaces.
+            md = rows_to_markdown(_cell_texts(page, t))
             if md:
                 items.append((t.bbox[1], "table", md, 0))
 

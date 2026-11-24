@@ -34,31 +34,91 @@ export const auth = {
   },
 };
 
+function toError(status: number, statusText: string, body: any, path: string): ApiError {
+  const e = body?.error ?? {};
+  if (status === 401 && path !== "/auth/login") {
+    auth.set(null);
+    window.dispatchEvent(new Event("rag:logout"));
+  }
+  const fallback = status === 413 ? "File is too large for the server." : status >= 500 ? "Server error." : statusText;
+  return new ApiError(status, e.code ?? "HTTP_ERROR", e.message ?? (fallback || "Request failed."), e.request_id, e.details);
+}
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (auth.token) headers.set("Authorization", `Bearer ${auth.token}`);
   if (init.body && !(init.body instanceof FormData) && !(init.body instanceof URLSearchParams))
     headers.set("Content-Type", "application/json");
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  } catch {
+    throw new ApiError(0, "NETWORK_ERROR", "Could not reach the server. Check your connection and try again.");
+  }
   if (res.status === 204) return undefined as T;
   const body = await res.json().catch(() => null);
-  if (!res.ok) {
-    const e = body?.error ?? {};
-    if (res.status === 401 && path !== "/auth/login") {
-      auth.set(null);
-      window.dispatchEvent(new Event("rag:logout"));
-    }
-    throw new ApiError(res.status, e.code ?? "HTTP_ERROR", e.message ?? res.statusText, e.request_id, e.details);
-  }
+  if (!res.ok) throw toError(res.status, res.statusText, body, path);
   return body as T;
 }
+
+// Upload one file with real byte-level progress (fetch cannot report upload progress).
+// onProgress(fraction) runs while bytes are sent; once they are all sent the server is processing.
+export function uploadFile(file: File, onProgress: (fraction: number) => void): { promise: Promise<Doc>; abort: () => void } {
+  const xhr = new XMLHttpRequest();
+  const promise = new Promise<Doc>((resolve, reject) => {
+    xhr.open("POST", `${API_URL}/documents`);
+    if (auth.token) xhr.setRequestHeader("Authorization", `Bearer ${auth.token}`);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.upload.onload = () => onProgress(1);
+    xhr.onload = () => {
+      let body: any = null;
+      try { body = JSON.parse(xhr.responseText); } catch { /* non-JSON error page (e.g. proxy) */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body as Doc);
+      else reject(toError(xhr.status, xhr.statusText, body, "/documents"));
+    };
+    xhr.onerror = () => reject(new ApiError(0, "NETWORK_ERROR", "Upload failed: could not reach the server."));
+    xhr.ontimeout = () => reject(new ApiError(0, "TIMEOUT", "Upload timed out."));
+    xhr.onabort = () => reject(new ApiError(0, "ABORTED", "Upload cancelled."));
+    const body = new FormData();
+    body.append("file", file);
+    xhr.send(body);
+  });
+  return { promise, abort: () => xhr.abort() };
+}
+
+// Small persisted UI state (survives page navigation and browser refresh). Storage can be unavailable.
+export const saved = {
+  get<T>(key: string, fallback: T): T {
+    try {
+      const raw = localStorage.getItem(`rag_${key}`);
+      return raw === null ? fallback : (JSON.parse(raw) as T);
+    } catch {
+      return fallback;
+    }
+  },
+  set(key: string, value: unknown) {
+    try {
+      if (value === null || value === undefined) localStorage.removeItem(`rag_${key}`);
+      else localStorage.setItem(`rag_${key}`, JSON.stringify(value));
+    } catch {
+      /* storage unavailable: state lasts for this page only */
+    }
+  },
+};
 
 // ---------- types mirroring app/schemas.py ----------
 export interface User { id: string; email: string; created_at: string }
 export interface Doc {
   id: string; filename: string; file_type: string; size_bytes: number; page_count: number | null;
   chunk_count: number; flagged_chunks: number; empty_pages: number[]; status: string; created_at: string;
+  can_reprocess: boolean; last_error: string | null;
 }
+export interface ContentBlock {
+  position: number; section: string | null; page_start: number | null; page_end: number | null; kind: string; text: string;
+}
+export interface DocumentContent { document: Doc; blocks: ContentBlock[]; total_blocks: number; total_tokens: number }
+export interface ReloadOut { document: Doc; mode: "reextracted" | "reindexed"; previous_chunk_count: number }
+export interface UploadLimits { max_upload_mb: number; max_pages: number; extensions: string[] }
 export interface Citation {
   n: number; chunk_id: string; document_id: string; filename: string;
   page_start: number | null; page_end: number | null; section: string | null; cited_text: string;
@@ -71,7 +131,7 @@ export interface Chunk {
 }
 export interface AskResponse {
   answer: string; refused: boolean; refusal_reason: string | null; language: string; session_id: string;
-  message_id: string; citations: Citation[]; retrieved_count: number; kept_count: number;
+  message_id: string; citations: Citation[]; retrieved_count: number; kept_count: number; context_mode?: string;
   retrieved_chunks: Chunk[]; retrieval_config: string;
   usage: { tokens_in: number; tokens_out: number; cost_usd: number };
   latency_ms: number; timings_ms: Record<string, number>; request_id: string;

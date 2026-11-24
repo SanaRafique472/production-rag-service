@@ -62,12 +62,13 @@ def test_zip_without_word_content_rejected(settings):
 
 
 def test_zip_bomb_rejected(settings):
+    """A bomb is judged by how much it expands to (see test_word_formats for the ratio rule)."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("word/document.xml", "<w/>")
         zf.writestr("word/padding.xml", "A" * 5_000_000)  # compresses ~1000:1
     with pytest.raises(CorruptFileError):
-        detect_file_type("bomb.docx", buf.getvalue(), settings)
+        detect_file_type("bomb.docx", buf.getvalue(), settings.model_copy(update={"max_zip_uncompressed_mb": 4}))
 
 
 def test_binary_named_txt_rejected(settings):
